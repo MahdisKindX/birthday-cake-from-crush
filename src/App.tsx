@@ -561,17 +561,17 @@ export default function App() {
             activeCardId={activeCardId}
             onToggleCard={handleCardToggle}
           />
-          <ambientLight intensity={(1 - environmentProgress) * 0.8} />
+          <ambientLight intensity={0.35 + (1 - environmentProgress) * 0.45} />
           <directionalLight intensity={0.5} position={[2, 10, 0]} color={[1, 0.9, 0.95]}/>
           <Environment
-            files={["/shanghai_bund_4k.hdr"]}
+            files={["/hdr.exr"]}
             backgroundRotation={[0, 3.3, 0]}
             environmentRotation={[0, 3.3, 0]}
             background
-            environmentIntensity={0.1 * environmentProgress}
-            backgroundIntensity={0.05 * environmentProgress}
+            environmentIntensity={1.1 * environmentProgress}
+            backgroundIntensity={1.0 * environmentProgress}
           />
-          <EnvironmentBackgroundController intensity={0.05 * environmentProgress} />
+          <EnvironmentBackgroundController intensity={1.0 * environmentProgress} />
           <Fireworks isActive={fireworksActive} origin={[0, 10, 0]} />
           <ConfiguredOrbitControls />
         </Suspense>
