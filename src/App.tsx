@@ -262,6 +262,7 @@ function AnimatedScene({
       }
     }
   });
+  
 
   return (
     <>
@@ -406,6 +407,42 @@ export default function App() {
       // ignore play errors (browser might block)
     });
   }, []);
+
+  useEffect(() => {
+  const trigger = () => {
+    if (!hasStarted) {
+      playBackgroundMusic();
+      setHasStarted(true);
+      return;
+    }
+    if (hasAnimationCompleted && isCandleLit) {
+      setIsCandleLit(false);
+      setFireworksActive(true);
+    }
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.code !== "Space" && event.key !== " ") return;
+    event.preventDefault();
+    trigger();
+  };
+
+  const handleTouchStart = (event: TouchEvent) => {
+    // only fire on actual touch-capable devices (prevents desktop trackpad/mouse weirdness)
+    if (!("ontouchstart" in window) && navigator.maxTouchPoints === 0) return;
+
+    event.preventDefault();
+    trigger();
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  window.addEventListener("touchstart", handleTouchStart, { passive: false });
+
+  return () => {
+    window.removeEventListener("keydown", handleKeyDown);
+    window.removeEventListener("touchstart", handleTouchStart);
+  };
+}, [hasStarted, hasAnimationCompleted, isCandleLit, playBackgroundMusic]);
 
   const typingComplete = currentLineIndex >= TYPED_LINES.length;
   const typedLines = useMemo(() => {
