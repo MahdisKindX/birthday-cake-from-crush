@@ -47,8 +47,10 @@ const TABLE_END_Z = 0;
 const TABLE_SLIDE_DURATION = 0.7;
 const TABLE_SLIDE_START = CAKE_DESCENT_DURATION - TABLE_SLIDE_DURATION - 0.1;
 
+
 const CANDLE_START_Y = 5;
-const CANDLE_END_Y = 0;
+const CANDLE_SINK = 0.13;
+const CANDLE_END_Y = -CANDLE_SINK;
 const CANDLE_DROP_DURATION = 1.2;
 const CANDLE_DROP_START =
   Math.max(CAKE_DESCENT_DURATION, TABLE_SLIDE_START + TABLE_SLIDE_DURATION) +
@@ -77,13 +79,13 @@ const BACKGROUND_FADE_START = Math.max(
 );
 
 const TYPED_LINES = [
-  "> tina",
+  "> masgu",
   "...",
   "> today is your birthday",
   "...",
-  "> so i made you this computer program",
+  "> so i made you this little surprise",
   "...",
-  "٩(◕‿◕)۶ ٩(◕‿◕)۶ ٩(◕‿◕)۶"
+  "🥳💐🎂🎈🎉🎁"
 ];
 const TYPED_CHAR_DELAY = 100;
 const POST_TYPING_SCENE_DELAY = 1000;
@@ -272,13 +274,13 @@ function AnimatedScene({
           scale={0.75}
         />
         <PictureFrame
-          image="/frame3.jpg"
+          image="/frame3.jpeg"
           position={[0, 0.735, -3]}
           rotation={[0, 4.0, 0]}
           scale={0.75}
         />
         <PictureFrame
-          image="/frame4.jpg"
+          image="/frame4.jpeg"
           position={[-1.5, 0.735, 2.5]}
           rotation={[0, 5.4, 0]}
           scale={0.75}
