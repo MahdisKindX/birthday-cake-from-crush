@@ -17,6 +17,8 @@ import { Table } from "./models/table";
 import { PictureFrame } from "./models/pictureFrame";
 import { Fireworks } from "./components/Fireworks";
 import { BirthdayCard } from "./components/BirthdayCard";
+import { ReflectionOverlay } from "./components/ReflectionOverlay";
+
 
 import "./App.css";
 
@@ -131,6 +133,7 @@ function AnimatedScene({
     onBackgroundFadeChange?.(backgroundOpacityRef.current);
     onEnvironmentProgressChange?.(environmentProgressRef.current);
   }, [onBackgroundFadeChange, onEnvironmentProgressChange]);
+  
 
   const emitBackgroundOpacity = (value: number) => {
     const clamped = clamp(value, 0, 1);
@@ -382,6 +385,18 @@ export default function App() {
   const [fireworksActive, setFireworksActive] = useState(false);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [showReflectionButton, setShowReflectionButton] = useState(false);
+  const [reflectionOpen, setReflectionOpen] = useState(false);
+
+
+    useEffect(() => {
+  if (!hasAnimationCompleted) {
+    setShowReflectionButton(false);
+    return;
+  }
+  const t = window.setTimeout(() => setShowReflectionButton(true), 10_000);
+  return () => window.clearTimeout(t);
+}, [hasAnimationCompleted]);
 
   useEffect(() => {
     const audio = new Audio("/music.mp3");
@@ -580,6 +595,20 @@ export default function App() {
       {hasAnimationCompleted && isCandleLit && (
         <div className="hint-overlay">press space to blow out the candle</div>
       )}
+      {showReflectionButton && (
+  <button
+    className="reflection-fab"
+    onClick={() => setReflectionOpen(true)}
+    type="button"
+  >
+    write a cute reflection
+  </button>
+)}
+
+<ReflectionOverlay
+  isOpen={reflectionOpen}
+  onClose={() => setReflectionOpen(false)}
+/>
       <Canvas
         gl={{ alpha: true }}
         style={{ background: "transparent" }}

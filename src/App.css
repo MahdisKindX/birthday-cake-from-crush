@@ -89,3 +89,234 @@ canvas {
   pointer-events: none;
   z-index: 3;
 }
+
+/* =========================
+   BIG SIDE BUTTON (on canvas)
+   ========================= */
+
+.reflection-fab {
+  position: absolute;
+  top: 50%;
+  right: 1.25rem;
+  transform: translateY(-50%);
+  z-index: 6;
+
+  width: min(320px, 42vw);
+  padding: 1.25rem 1.2rem;
+  border-radius: 18px;
+
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+
+  cursor: pointer;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+  transition: transform 180ms ease, opacity 180ms ease;
+  opacity: 0.98;
+}
+
+.reflection-fab:hover {
+  transform: translateY(-50%) scale(1.02);
+}
+
+.reflection-fab:active {
+  transform: translateY(-50%) scale(0.99);
+}
+
+@media (max-width: 720px) {
+  .reflection-fab {
+    top: auto;
+    bottom: 1.2rem;
+    right: 1rem;
+    transform: none;
+    width: calc(100% - 2rem);
+    text-align: center;
+  }
+  .reflection-fab:hover,
+  .reflection-fab:active {
+    transform: none;
+  }
+}
+
+/* =========================
+   OPAQUE FULL OVERLAY
+   ========================= */
+
+.reflection-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.08) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 1.5rem;
+}
+
+/* =========================
+   BIG PANEL + WHITE BORDERS
+   ========================= */
+
+.reflection-card {
+  width: min(920px, 96vw);
+  border-radius: 22px;
+
+  border: 2px solid rgba(255,255,255,0.92);
+  background: rgba(0, 0, 0, 0.25) !important;
+  color: rgba(255, 255, 255, 0.95);
+
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.55);
+  padding: 1.4rem 1.4rem 1.2rem;
+
+  font-family: "Courier New", Courier, monospace;
+  letter-spacing: 0.06em;
+}
+
+.reflection-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.reflection-title {
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.98;
+}
+
+.reflection-close {
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.95);
+  border-radius: 14px;
+  width: 46px;
+  height: 42px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  padding: 0;
+  font-size: 18px;  
+}
+
+/* =========================
+   STEPPER (more prominent)
+   ========================= */
+
+.reflection-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 1.1rem 0 1.1rem;
+}
+
+.step-dot {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.12);
+  font-weight: 900;
+  opacity: 0.6;
+}
+
+.step-dot.active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* =========================
+   BIG LABELS + TEXTBOX
+   ========================= */
+
+.reflection-heading {
+  font-size: clamp(1.25rem, 2.2vw, 1.75rem);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 0.55rem;
+}
+
+.reflection-sub {
+  font-size: 0.95rem;
+  opacity: 0.88;
+  margin-bottom: 1rem;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+}
+
+.reflection-textarea {
+  width: 100%;
+  border-radius: 18px;
+
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.96);
+
+  padding: 1.05rem 1.05rem;
+  resize: none;
+  outline: none;
+
+  font-family: "Courier New", Courier, monospace;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  line-height: 1.55;
+}
+
+.reflection-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* =========================
+   ACTION BUTTONS (bigger)
+   ========================= */
+
+.reflection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  margin-top: 1.15rem;
+}
+
+.reflection-btn {
+  padding: 0.95rem 1.1rem;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 800;
+}
+
+.reflection-btn.ghost {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.reflection-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
