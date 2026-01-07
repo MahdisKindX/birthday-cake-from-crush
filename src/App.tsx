@@ -11,7 +11,7 @@ import { Table } from "./models/table"
 import { PictureFrame } from "./models/pictureFrame"
 import { Fireworks } from "./components/Fireworks"
 import { BirthdayCard } from "./components/BirthdayCard"
-import { ReflectionOverlay } from "./components/ReflectionOverlay"
+// import { ReflectionOverlay } from "./components/ReflectionOverlay"
 import { CookieScene } from "./components/CookieScene"
 import { GymScene } from "./components/GymScene"
 import { ItalianScene } from "./components/ItalianScene"
@@ -83,7 +83,7 @@ const TYPED_LINES = [
 const TYPED_CHAR_DELAY = 100
 const POST_TYPING_SCENE_DELAY = 1000
 const CURSOR_BLINK_INTERVAL = 480
-const ACHIEVEMENTS_PROMPT_DELAY = 10000
+// const ACHIEVEMENTS_PROMPT_DELAY = 10000
 
 const BIRTHDAY_CARDS: ReadonlyArray<BirthdayCardConfig> = [
   {
@@ -403,7 +403,7 @@ function StartModal({ onStart }: { onStart: () => void }) {
 
 function GlassActionOverlay({
   title,
-    buttonText,
+  buttonText,
   onAction,
 }: {
   title?: string
@@ -413,9 +413,9 @@ function GlassActionOverlay({
   return (
     <div className="action-overlay action-overlay--bottom">
       <div className="glass-panel">
-        {(title) && (
+        {title && (
           <div className="glass-panel__copy">
-            {title && <div className="glass-panel__title">{title}</div>}
+            <div className="glass-panel__title">{title}</div>
           </div>
         )}
         <button className="glass-button" onClick={onAction}>
@@ -444,10 +444,13 @@ export default function App() {
   const [fireworksActive, setFireworksActive] = useState(false)
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null)
-  const [showReflectionButton, setShowReflectionButton] = useState(false)
-  const [reflectionOpen, setReflectionOpen] = useState(false)
-  const [sceneIndex, setSceneIndex] = useState<0 | 1>(0)
-  const [showAchievementsPrompt, setShowAchievementsPrompt] = useState(false)
+
+  // reflection/achievements (disabled for now)
+  // const [showReflectionButton, setShowReflectionButton] = useState(false)
+  // const [reflectionOpen, setReflectionOpen] = useState(false)
+  // const [sceneIndex, setSceneIndex] = useState<0 | 1>(0)
+  // const [showAchievementsPrompt, setShowAchievementsPrompt] = useState(false)
+
   const [showLookBackPrompt, setShowLookBackPrompt] = useState(false)
 
   function NextScene() {
@@ -470,23 +473,24 @@ export default function App() {
     )
   }
 
-  useEffect(() => {
-    if (sceneIndex !== 0 || !hasAnimationCompleted || isCandleLit) {
-      setShowAchievementsPrompt(false)
-      return
-    }
-    const t = window.setTimeout(() => setShowAchievementsPrompt(true), ACHIEVEMENTS_PROMPT_DELAY)
-    return () => window.clearTimeout(t)
-  }, [sceneIndex, hasAnimationCompleted, isCandleLit])
+  // reflection/achievements (disabled for now)
+  // useEffect(() => {
+  //   if (sceneIndex !== 0 || !hasAnimationCompleted || isCandleLit) {
+  //     setShowAchievementsPrompt(false)
+  //     return
+  //   }
+  //   const t = window.setTimeout(() => setShowAchievementsPrompt(true), ACHIEVEMENTS_PROMPT_DELAY)
+  //   return () => window.clearTimeout(t)
+  // }, [sceneIndex, hasAnimationCompleted, isCandleLit])
 
-  useEffect(() => {
-    if (!hasAnimationCompleted) {
-      setShowReflectionButton(false)
-      return
-    }
-    const t = window.setTimeout(() => setShowReflectionButton(true), 10000)
-    return () => window.clearTimeout(t)
-  }, [hasAnimationCompleted])
+  // useEffect(() => {
+  //   if (!hasAnimationCompleted) {
+  //     setShowReflectionButton(false)
+  //     return
+  //   }
+  //   const t = window.setTimeout(() => setShowReflectionButton(true), 10000)
+  //   return () => window.clearTimeout(t)
+  // }, [hasAnimationCompleted])
 
   useEffect(() => {
     const audio = new Audio("/music.mp3")
@@ -679,11 +683,7 @@ export default function App() {
           )}
 
           {hasAnimationCompleted && !isCandleLit && showLookBackPrompt && (
-            <GlassActionOverlay
-              title="Look back on your achievements at 22"
-              buttonText="Continue"
-              onAction={activate}
-            />
+            <GlassActionOverlay title="Look back on your achievements at 22" buttonText="Continue" onAction={activate} />
           )}
 
           <Canvas

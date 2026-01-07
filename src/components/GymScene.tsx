@@ -28,26 +28,26 @@ function markShadows(root: Group) {
 }
 
 function pickTargetRange(width = 0.09, lastMin?: number): [number, number] {
-  const lo = 0.18;
-  const hi = 0.96;
-  const maxMin = Math.max(lo, hi - width);
+  const lo = 0.18
+  const hi = 0.96
+  const maxMin = Math.max(lo, hi - width)
 
-  const randMin = () => lo + Math.random() * (maxMin - lo);
+  const randMin = () => lo + Math.random() * (maxMin - lo)
 
-  let min = randMin();
+  let min = randMin()
 
   if (typeof lastMin === "number") {
-    let tries = 0;
+    let tries = 0
     while (Math.abs(min - lastMin) < 0.32 && tries < 10) {
-      min = randMin();
-      tries += 1;
+      min = randMin()
+      tries += 1
     }
     if (Math.abs(min - lastMin) < 0.32) {
-      min = min < 0.5 ? Math.min(maxMin, min + 0.45) : Math.max(lo, min - 0.45);
+      min = min < 0.5 ? Math.min(maxMin, min + 0.45) : Math.max(lo, min - 0.45)
     }
   }
 
-  return [min, min + width];
+  return [min, min + width]
 }
 
 function mulScale(
@@ -97,15 +97,7 @@ type FloatingDrinkProps = {
   scale?: number
 }
 
-function FloatingDrink({
-  url,
-  angle,
-  radius,
-  baseY,
-  spinOffset,
-  fitHeight,
-  scale = 1,
-}: FloatingDrinkProps) {
+function FloatingDrink({ url, angle, radius, baseY, spinOffset, fitHeight, scale = 1 }: FloatingDrinkProps) {
   const ref = useRef<Group>(null)
   const x = Math.cos(angle) * radius
   const z = Math.sin(angle) * radius
@@ -120,12 +112,7 @@ function FloatingDrink({
   })
 
   return (
-    <group
-      ref={ref}
-      position={[x, baseY, z]}
-      rotation={[0, -angle + Math.PI, 0]}
-      scale={scale}
-    >
+    <group ref={ref} position={[x, baseY, z]} rotation={[0, -angle + Math.PI, 0]} scale={scale}>
       <GroundedClone url={url} fitHeight={fitHeight} />
     </group>
   )
@@ -159,7 +146,7 @@ function CameraSetup() {
   )
 }
 
-function GymWorld({ ringSpeed }: { ringSpeed: number }) {
+function GymWorld({ ringSpeed, playerUrl }: { ringSpeed: number; playerUrl: string }) {
   const WORLD_SCALE = 2.25
   const WORLD_Y = -0.22
   const ringRef = useRef<Group>(null)
@@ -171,11 +158,7 @@ function GymWorld({ ringSpeed }: { ringSpeed: number }) {
   })
 
   const drinkUrls = useMemo(
-    () => [
-      "/gym/monster_zero.glb",
-      "/gym/monster_energy_drink.glb",
-      "/gym/monster_energy_drink_mango.glb",
-    ],
+    () => ["/gym/monster_zero.glb", "/gym/monster_energy_drink.glb", "/gym/monster_energy_drink_mango.glb"],
     []
   )
 
@@ -204,13 +187,7 @@ function GymWorld({ ringSpeed }: { ringSpeed: number }) {
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
       />
-      <spotLight
-        intensity={1.0}
-        position={[-3.2, 6.8, 2.6]}
-        angle={0.35}
-        penumbra={0.55}
-        castShadow
-      />
+      <spotLight intensity={1.0} position={[-3.2, 6.8, 2.6]} angle={0.35} penumbra={0.55} castShadow />
       <hemisphereLight intensity={0.35} color="#ffffff" groundColor="#0e0e12" />
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.22, 0]} receiveShadow>
@@ -228,7 +205,7 @@ function GymWorld({ ringSpeed }: { ringSpeed: number }) {
       <ContactShadows position={[0, -0.205, 0]} opacity={0.32} scale={13} blur={2.1} far={9} />
 
       <group position={[0, WORLD_Y, 0]} scale={WORLD_SCALE}>
-        <GroundedClone url="/gym/massa_pbr.glb" position={[0, 0, 0]} scale={1.1} />
+        <GroundedClone url={playerUrl} position={[0, 0, 0]} scale={1.1} />
 
         <GroundedClone
           url="/gym/dumbbell_barbell_bench_-_9mb.glb"
@@ -237,19 +214,9 @@ function GymWorld({ ringSpeed }: { ringSpeed: number }) {
           scale={1.0}
         />
 
-        <GroundedClone
-          url="/gym/stationary_bike.glb"
-          position={[-1.55, 0, 1.22]}
-          rotation={[0, 0.95, 0]}
-          fitHeight={0.95}
-        />
+        <GroundedClone url="/gym/stationary_bike.glb" position={[-1.55, 0, 1.22]} rotation={[0, 0.95, 0]} fitHeight={0.95} />
 
-        <GroundedClone
-          url="/gym/dumbbells.glb"
-          position={[-0.65, 0, 1.35]}
-          rotation={[0, 0.25, 0]}
-          scale={1.2}
-        />
+        <GroundedClone url="/gym/dumbbells.glb" position={[-0.65, 0, 1.35]} rotation={[0, 0.25, 0]} scale={1.2} />
 
         <group ref={ringRef} position={[0, 0, 0]}>
           {drinks.map((d, i) => (
@@ -299,110 +266,98 @@ type RepGameProps = {
   onContinue: () => void
 }
 
-function PerfectRepHUD({
-  streak,
-  required,
-  unlocked,
-  perfectMin,
-  perfectMax,
-  onAttempt,
-  onContinue,
-}: RepGameProps) {
-  const [meter, setMeter] = useState(0);
-  const [flash, setFlash] = useState<"perfect" | "miss" | null>(null);
-  const [repFxKey, setRepFxKey] = useState(0);
-  const [pulseKey, setPulseKey] = useState(0);
+function PerfectRepHUD({ streak, required, unlocked, perfectMin, perfectMax, onAttempt, onContinue }: RepGameProps) {
+  const [meter, setMeter] = useState(0)
+  const [flash, setFlash] = useState<"perfect" | "miss" | null>(null)
+  const [repFxKey, setRepFxKey] = useState(0)
+  const [pulseKey, setPulseKey] = useState(0)
 
-  const holdingRef = useRef(false);
-  const meterRef = useRef(0);
-  const rafRef = useRef<number | null>(null);
-  const lastTRef = useRef<number | null>(null);
+  const holdingRef = useRef(false)
+  const meterRef = useRef(0)
+  const rafRef = useRef<number | null>(null)
+  const lastTRef = useRef<number | null>(null)
 
   const triggerFlash = useCallback((k: "perfect" | "miss") => {
-    setFlash(k);
-    window.setTimeout(() => setFlash(null), 520);
-  }, []);
+    setFlash(k)
+    window.setTimeout(() => setFlash(null), 520)
+  }, [])
 
   const releaseAttempt = useCallback(() => {
-  const v = meterRef.current;
-  onAttempt(v);
+    const v = meterRef.current
+    onAttempt(v)
 
-  const ok = v >= perfectMin && v <= perfectMax;
+    const ok = v >= perfectMin && v <= perfectMax
 
-  setRepFxKey((k) => k + 1);
-  if (ok) setPulseKey((p) => p + 1);
+    setRepFxKey((k) => k + 1)
+    if (ok) setPulseKey((p) => p + 1)
 
-  triggerFlash(ok ? "perfect" : "miss");
+    triggerFlash(ok ? "perfect" : "miss")
 
-  meterRef.current = 0;
-  setMeter(0);
-}, [onAttempt, perfectMin, perfectMax, triggerFlash]);
+    meterRef.current = 0
+    setMeter(0)
+  }, [onAttempt, perfectMin, perfectMax, triggerFlash])
 
   useEffect(() => {
     const tick = (t: number) => {
-      const last = lastTRef.current ?? t;
-      const dt = Math.min((t - last) / 1000, 0.05);
-      lastTRef.current = t;
+      const last = lastTRef.current ?? t
+      const dt = Math.min((t - last) / 1000, 0.05)
+      lastTRef.current = t
 
-      const upSpeed = 1.15;
-      const downSpeed = 1.35;
+      const upSpeed = 1.15
+      const downSpeed = 1.35
 
-      const holding = holdingRef.current;
-      let next = meterRef.current + (holding ? upSpeed : -downSpeed) * dt;
-      if (next < 0) next = 0;
-      if (next > 1) next = 1;
+      const holding = holdingRef.current
+      let next = meterRef.current + (holding ? upSpeed : -downSpeed) * dt
+      if (next < 0) next = 0
+      if (next > 1) next = 1
 
-      meterRef.current = next;
-      setMeter(next);
+      meterRef.current = next
+      setMeter(next)
 
-      rafRef.current = window.requestAnimationFrame(tick);
-    };
+      rafRef.current = window.requestAnimationFrame(tick)
+    }
 
-    rafRef.current = window.requestAnimationFrame(tick);
+    rafRef.current = window.requestAnimationFrame(tick)
     return () => {
-      if (rafRef.current) window.cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      lastTRef.current = null;
-    };
-  }, []);
+      if (rafRef.current) window.cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+      lastTRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const isSpace = e.code === "Space" || e.key === " ";
-      if (!isSpace) return;
-      if (e.repeat) return;
-      e.preventDefault();
+      const isSpace = e.code === "Space" || e.key === " "
+      if (!isSpace) return
+      if (e.repeat) return
+      e.preventDefault()
 
-      if (unlocked) {
-        onContinue();
-        return;
-      }
-
-      holdingRef.current = true;
-    };
+      if (unlocked) return
+      holdingRef.current = true
+    }
 
     const onKeyUp = (e: KeyboardEvent) => {
-      const isSpace = e.code === "Space" || e.key === " ";
-      if (!isSpace) return;
-      e.preventDefault();
+      const isSpace = e.code === "Space" || e.key === " "
+      if (!isSpace) return
+      e.preventDefault()
 
-      if (unlocked) return;
+      if (unlocked) return
 
-      holdingRef.current = false;
-      releaseAttempt();
-    };
+      holdingRef.current = false
+      releaseAttempt()
+    }
 
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("keydown", onKeyDown)
+    window.addEventListener("keyup", onKeyUp)
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-    };
-  }, [onContinue, releaseAttempt, unlocked]);
+      window.removeEventListener("keydown", onKeyDown)
+      window.removeEventListener("keyup", onKeyUp)
+    }
+  }, [releaseAttempt, unlocked])
 
-  const pct = Math.round(meter * 100);
-  const pMinPct = Math.round(perfectMin * 100);
-  const pWidthPct = Math.max(0, Math.round((perfectMax - perfectMin) * 100));
+  const pct = Math.round(meter * 100)
+  const pMinPct = Math.round(perfectMin * 100)
+  const pWidthPct = Math.max(0, Math.round((perfectMax - perfectMin) * 100))
 
   return (
     <>
@@ -425,35 +380,35 @@ function PerfectRepHUD({
       <div className="gym-hud-bottom">
         <div className="gym-rep-wrap">
           <div className="gym-rep-row">
-            <div className="gym-rep-big">
-              {unlocked ? "Unlocked" : "Hold Space to lift, release at the top"}
-            </div>
-            <div className="gym-rep-small">
-              {unlocked ? "Space or Continue" : `${streak}/${required} perfect reps`}
-            </div>
+            <div className="gym-rep-big">{unlocked ? "GYM QUEEN 💪🏻" : "Hold Space to lift, release at the top"}</div>
+            {!unlocked && <div className="gym-rep-small">{`${streak}/${required} perfect reps`}</div>}
           </div>
 
-          <div className="gym-rep-emoji" key={`repfx-${repFxKey}`} aria-hidden="true">
-            🏋️
-          </div>
+          {!unlocked && (
+            <>
+              <div className="gym-rep-emoji" key={`repfx-${repFxKey}`} aria-hidden="true">
+                🏋️
+              </div>
 
-          <div
-            className="gym-rep-bar"
-            style={
-              {
-                ["--pmin" as any]: `${pMinPct}%`,
-                ["--pwidth" as any]: `${pWidthPct}%`,
-                ["--fill" as any]: `${meter}`,
-              } as any
-            }
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={pct}
-          >
-            <div className="gym-rep-fill" />
-            <div className="gym-rep-tick" style={{ left: `${pct}%` }} />
-          </div>
+              <div
+                className="gym-rep-bar"
+                style={
+                  {
+                    ["--pmin" as any]: `${pMinPct}%`,
+                    ["--pwidth" as any]: `${pWidthPct}%`,
+                    ["--fill" as any]: `${meter}`,
+                  } as any
+                }
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={pct}
+              >
+                <div className="gym-rep-fill" />
+                <div className="gym-rep-tick" style={{ left: `${pct}%` }} />
+              </div>
+            </>
+          )}
 
           {unlocked && (
             <button className="gym-continue-btn" type="button" onClick={onContinue}>
@@ -463,21 +418,20 @@ function PerfectRepHUD({
         </div>
       </div>
     </>
-  );
+  )
 }
 
 export function GymScene({ onNextScene }: GymSceneProps) {
   const [mounted, setMounted] = useState(false)
 
-  const REQUIRED_STREAK = 10
-  const PERFECT_MIN = 0.86
-  const PERFECT_MAX = 0.95
+  const REQUIRED_STREAK = 5
 
   const [streak, setStreak] = useState(0)
   const [unlocked, setUnlocked] = useState(false)
-const [target, setTarget] = useState<[number, number]>(() => pickTargetRange(0.09));
-const targetMin = target[0];
-const targetMax = target[1];
+
+  const [target, setTarget] = useState<[number, number]>(() => pickTargetRange(0.09))
+  const targetMin = target[0]
+  const targetMax = target[1]
 
   const ringSpeed = useMemo(() => {
     const base = 0.12
@@ -485,36 +439,39 @@ const targetMax = target[1];
     return base * factor
   }, [streak, unlocked])
 
+  const playerUrl = useMemo(() => {
+    return unlocked ? "/gym/massa_buff.glb" : "/gym/massa_pbr.glb"
+  }, [unlocked])
+
   useEffect(() => {
     const t = window.setTimeout(() => setMounted(true), 40)
     return () => window.clearTimeout(t)
   }, [])
 
+  const handleAttempt = useCallback(
+    (releasedAt: number) => {
+      if (unlocked) return
 
-const handleAttempt = useCallback(
-  (releasedAt: number) => {
-    if (unlocked) return;
+      const ok = releasedAt >= targetMin && releasedAt <= targetMax
 
-    const ok = releasedAt >= targetMin && releasedAt <= targetMax;
+      setTarget((prev) => pickTargetRange(0.09, prev[0]))
 
-    setTarget((prev) => pickTargetRange(0.09, prev[0]));
-
-    if (!ok) {
-      setStreak(0);
-      return;
-    }
-
-    setStreak((s) => {
-      const next = s + 1;
-      if (next >= REQUIRED_STREAK) {
-        setUnlocked(true);
-        return REQUIRED_STREAK;
+      if (!ok) {
+        setStreak(0)
+        return
       }
-      return next;
-    });
-  },
-  [REQUIRED_STREAK, targetMin, targetMax, unlocked]
-);
+
+      setStreak((s) => {
+        const next = s + 1
+        if (next >= REQUIRED_STREAK) {
+          setUnlocked(true)
+          return REQUIRED_STREAK
+        }
+        return next
+      })
+    },
+    [REQUIRED_STREAK, targetMin, targetMax, unlocked]
+  )
 
   const handleContinue = useCallback(() => {
     if (!unlocked) return
@@ -598,143 +555,143 @@ const handleAttempt = useCallback(
         }
 
         .gym-rep-bar {
-  position: relative;
-  height: 14px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 90, 90, 0.26);
-  background: rgba(170, 28, 28, 0.20);
-  overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18);
-  pointer-events: none;
-}
+          position: relative;
+          height: 14px;
+          border-radius: 999px;
+          border: 2px solid rgba(255, 90, 90, 0.26);
+          background: rgba(170, 28, 28, 0.20);
+          overflow: hidden;
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18);
+          pointer-events: none;
+        }
 
-.gym-rep-bar::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--pmin, 86%);
-  width: var(--pwidth, 9%);
-  background: linear-gradient(
-    to right,
-    rgba(0, 255, 160, 0.08),
-    rgba(0, 255, 160, 0.28),
-    rgba(0, 255, 160, 0.08)
-  );
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 255, 160, 0.20),
-    0 0 22px rgba(0, 255, 160, 0.12);
-}
+        .gym-rep-bar::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: var(--pmin, 86%);
+          width: var(--pwidth, 9%);
+          background: linear-gradient(
+            to right,
+            rgba(0, 255, 160, 0.08),
+            rgba(0, 255, 160, 0.28),
+            rgba(0, 255, 160, 0.08)
+          );
+          box-shadow:
+            inset 0 0 0 1px rgba(0, 255, 160, 0.20),
+            0 0 22px rgba(0, 255, 160, 0.12);
+        }
 
-.gym-rep-fill {
-  height: 100%;
-  background: rgba(255, 255, 255, 0.92);
-  transform-origin: left;
-  transform: scaleX(var(--fill, 0));
-  will-change: transform;
-}
+        .gym-rep-fill {
+          height: 100%;
+          background: rgba(255, 255, 255, 0.92);
+          transform-origin: left;
+          transform: scaleX(var(--fill, 0));
+          will-change: transform;
+        }
 
-.gym-rep-tick {
-  position: absolute;
-  top: -7px;
-  width: 2px;
-  height: 28px;
-  background: rgba(255,255,255,0.75);
-  transform: translateX(-1px);
-  opacity: 0.9;
-  box-shadow: 0 0 18px rgba(255,255,255,0.12);
-}
+        .gym-rep-tick {
+          position: absolute;
+          top: -7px;
+          width: 2px;
+          height: 28px;
+          background: rgba(255,255,255,0.75);
+          transform: translateX(-1px);
+          opacity: 0.9;
+          box-shadow: 0 0 18px rgba(255,255,255,0.12);
+        }
 
-.gym-rep-emoji {
-  justify-self: center;
-  text-align: center;
-  font-size: clamp(1.6rem, 2.8vw, 2.1rem);
-  line-height: 1;
-  opacity: 0;
-  filter: drop-shadow(0 10px 28px rgba(255,255,255,0.10));
-  animation: gymEmojiPop 520ms ease both;
-  pointer-events: none;
-}
+        .gym-rep-emoji {
+          justify-self: center;
+          text-align: center;
+          font-size: clamp(1.6rem, 2.8vw, 2.1rem);
+          line-height: 1;
+          opacity: 0;
+          filter: drop-shadow(0 10px 28px rgba(255,255,255,0.10));
+          animation: gymEmojiPop 520ms ease both;
+          pointer-events: none;
+        }
 
-@keyframes gymEmojiPop {
-  0% { opacity: 0; transform: translateY(6px) scale(0.92); filter: drop-shadow(0 0 0 rgba(0,0,0,0)); }
-  24% { opacity: 1; transform: translateY(-2px) scale(1.08); filter: drop-shadow(0 18px 44px rgba(255,255,255,0.18)); }
-  100% { opacity: 0; transform: translateY(-4px) scale(1.02); filter: drop-shadow(0 10px 28px rgba(255,255,255,0.10)); }
-}
+        @keyframes gymEmojiPop {
+          0% { opacity: 0; transform: translateY(6px) scale(0.92); filter: drop-shadow(0 0 0 rgba(0,0,0,0)); }
+          24% { opacity: 1; transform: translateY(-2px) scale(1.08); filter: drop-shadow(0 18px 44px rgba(255,255,255,0.18)); }
+          100% { opacity: 0; transform: translateY(-4px) scale(1.02); filter: drop-shadow(0 10px 28px rgba(255,255,255,0.10)); }
+        }
 
-.gym-flash.is-perfect {
-  border-color: rgba(0, 255, 160, 0.28);
-  background: rgba(0, 255, 160, 0.10);
-  box-shadow: 0 24px 90px rgba(0, 255, 160, 0.14);
-}
+        .gym-flash.is-perfect {
+          border-color: rgba(0, 255, 160, 0.28);
+          background: rgba(0, 255, 160, 0.10);
+          box-shadow: 0 24px 90px rgba(0, 255, 160, 0.14);
+        }
 
-.gym-flash.is-miss {
-  border-color: rgba(255, 90, 90, 0.30);
-  background: rgba(255, 40, 40, 0.10);
-  box-shadow: 0 24px 90px rgba(255, 70, 70, 0.12);
-}
+        .gym-flash.is-miss {
+          border-color: rgba(255, 90, 90, 0.30);
+          background: rgba(255, 40, 40, 0.10);
+          box-shadow: 0 24px 90px rgba(255, 70, 70, 0.12);
+        }
 
-.gym-light-pulse {
-  position: absolute;
-  inset: 0;
-  z-index: 9;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  opacity: 0;
-  background:
-    radial-gradient(900px 520px at 50% 34%, rgba(255,255,255,0.18), rgba(255,255,255,0) 60%),
-    radial-gradient(1200px 760px at 30% 72%, rgba(0,255,160,0.14), rgba(0,255,160,0) 62%),
-    radial-gradient(1200px 760px at 70% 70%, rgba(255,110,60,0.10), rgba(255,110,60,0) 62%);
-  animation: gymPulse 1100ms ease-out both;
-}
+        .gym-light-pulse {
+          position: absolute;
+          inset: 0;
+          z-index: 9;
+          pointer-events: none;
+          mix-blend-mode: screen;
+          opacity: 0;
+          background:
+            radial-gradient(900px 520px at 50% 34%, rgba(255,255,255,0.18), rgba(255,255,255,0) 60%),
+            radial-gradient(1200px 760px at 30% 72%, rgba(0,255,160,0.14), rgba(0,255,160,0) 62%),
+            radial-gradient(1200px 760px at 70% 70%, rgba(255,110,60,0.10), rgba(255,110,60,0) 62%);
+          animation: gymPulse 1100ms ease-out both;
+        }
 
-@keyframes gymPulse {
-  0% { opacity: 0; }
-  18% { opacity: 1; }
-  100% { opacity: 0; }
-}
+        @keyframes gymPulse {
+          0% { opacity: 0; }
+          18% { opacity: 1; }
+          100% { opacity: 0; }
+        }
 
-.gym-light-strobe {
-  position: absolute;
-  inset: 0;
-  z-index: 9;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  opacity: 0;
-  background: rgba(255,255,255,0.22);
-  animation: gymStrobe 420ms ease both;
-}
+        .gym-light-strobe {
+          position: absolute;
+          inset: 0;
+          z-index: 9;
+          pointer-events: none;
+          mix-blend-mode: screen;
+          opacity: 0;
+          background: rgba(255,255,255,0.22);
+          animation: gymStrobe 420ms ease both;
+        }
 
-@keyframes gymStrobe {
-  0% { opacity: 0; }
-  14% { opacity: 1; }
-  42% { opacity: 0.15; }
-  100% { opacity: 0; }
-}
+        @keyframes gymStrobe {
+          0% { opacity: 0; }
+          14% { opacity: 1; }
+          42% { opacity: 0.15; }
+          100% { opacity: 0; }
+        }
 
-.gym-light-sweep {
-  position: absolute;
-  inset: -20% 0;
-  z-index: 9;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  opacity: 0;
-  background: linear-gradient(
-    to bottom,
-    rgba(0,0,0,0) 0%,
-    rgba(255,255,255,0.12) 45%,
-    rgba(0,255,160,0.10) 55%,
-    rgba(0,0,0,0) 100%
-  );
-  transform: translateY(-24%);
-  animation: gymSweep 1200ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
-}
+        .gym-light-sweep {
+          position: absolute;
+          inset: -20% 0;
+          z-index: 9;
+          pointer-events: none;
+          mix-blend-mode: screen;
+          opacity: 0;
+          background: linear-gradient(
+            to bottom,
+            rgba(0,0,0,0) 0%,
+            rgba(255,255,255,0.12) 45%,
+            rgba(0,255,160,0.10) 55%,
+            rgba(0,0,0,0) 100%
+          );
+          transform: translateY(-24%);
+          animation: gymSweep 1200ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+        }
 
-@keyframes gymSweep {
-  0% { opacity: 0; transform: translateY(-24%); }
-  18% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(24%); }
-}
+        @keyframes gymSweep {
+          0% { opacity: 0; transform: translateY(-24%); }
+          18% { opacity: 1; }
+          100% { opacity: 0; transform: translateY(24%); }
+        }
 
         .gym-continue-btn {
           justify-self: center;
@@ -813,19 +770,19 @@ const handleAttempt = useCallback(
       `}</style>
 
       <PerfectRepHUD
-  streak={streak}
-  required={REQUIRED_STREAK}
-  unlocked={unlocked}
-  perfectMin={targetMin}
-  perfectMax={targetMax}
-  onAttempt={handleAttempt}
-  onContinue={handleContinue}
-/>
+        streak={streak}
+        required={REQUIRED_STREAK}
+        unlocked={unlocked}
+        perfectMin={targetMin}
+        perfectMax={targetMax}
+        onAttempt={handleAttempt}
+        onContinue={handleContinue}
+      />
 
       <div className="gym-canvas">
         <Canvas shadows gl={{ antialias: true }}>
           <Suspense fallback={null}>
-            <GymWorld ringSpeed={ringSpeed} />
+            <GymWorld ringSpeed={ringSpeed} playerUrl={playerUrl} />
             <GymHDRI />
             <pointLight intensity={0.85} position={[-1.4, 1.4, 1.2]} distance={6} />
             <CameraSetup />
@@ -837,7 +794,7 @@ const handleAttempt = useCallback(
 }
 
 useGLTF.preload("/gym/massa_pbr.glb")
-useGLTF.preload("/gym/massa_shaded.glb")
+useGLTF.preload("/gym/massa_buff.glb")
 useGLTF.preload("/gym/stationary_bike.glb")
 useGLTF.preload("/gym/dumbbell_barbell_bench_-_9mb.glb")
 useGLTF.preload("/gym/dumbbells.glb")

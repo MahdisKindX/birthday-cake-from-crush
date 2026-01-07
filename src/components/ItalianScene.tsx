@@ -1044,8 +1044,6 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
                                         </button>
                                     </div>
 
-                                    <div style={{ marginTop: 2, opacity: 0.76, fontSize: 13 }}>Press space to continue</div>
-
                                     <div style={{ marginTop: 10 }}>
                                         <div style={progressWrapInCardStyle} aria-label="progress">
                                             <div style={progressFillStyle} />
