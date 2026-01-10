@@ -15,12 +15,24 @@ import { BirthdayCard } from "./components/BirthdayCard"
 import { CookieScene } from "./components/CookieScene"
 import { GymScene } from "./components/GymScene"
 import { ItalianScene } from "./components/ItalianScene"
+import { DBD } from "./components/DBD"
 
 import "./App.css"
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const lerp = (from: number, to: number, t: number) => from + (to - from) * t
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+
+type SceneMode = "birthday" | "cookie" | "gym" | "italian" | "dbd" | "next"
+
+const SCENE_MUSIC: Record<SceneMode, string | null> = {
+  birthday: "/music.mp3",
+  cookie: "/cookie/cookie.mp3",
+  gym: "/gym/afterlife.mp3",
+  italian: "/italy/amor-mio.mp3",
+  dbd: null,
+  next: null,
+}
 
 type BirthdayCardConfig = {
   id: string
@@ -427,7 +439,6 @@ function GlassActionOverlay({
 }
 
 export default function App() {
-  type SceneMode = "birthday" | "cookie" | "gym" | "italian" | "next"
   const [sceneMode, setSceneMode] = useState<SceneMode>("birthday")
 
   const [hasStarted, setHasStarted] = useState(false)
@@ -443,7 +454,10 @@ export default function App() {
   const [isCandleLit, setIsCandleLit] = useState(true)
   const [fireworksActive, setFireworksActive] = useState(false)
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
+
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null)
+  const currentTrackRef = useRef<string | null>(null)
+  const needsUnlockRef = useRef(false)
 
   // reflection/achievements (disabled for now)
   // const [showReflectionButton, setShowReflectionButton] = useState(false)
@@ -473,6 +487,87 @@ export default function App() {
     )
   }
 
+  useEffect(() => {
+    const audio = new Audio()
+    audio.loop = true
+    audio.preload = "auto"
+    audio.volume = 0.05
+    backgroundAudioRef.current = audio
+
+    return () => {
+      audio.pause()
+      backgroundAudioRef.current = null
+      currentTrackRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const tryUnlock = () => {
+      if (!needsUnlockRef.current) return
+      const audio = backgroundAudioRef.current
+      if (!audio) return
+      needsUnlockRef.current = false
+      void audio.play().catch(() => {
+        needsUnlockRef.current = true
+      })
+    }
+
+    window.addEventListener("pointerdown", tryUnlock)
+    window.addEventListener("keydown", tryUnlock)
+    return () => {
+      window.removeEventListener("pointerdown", tryUnlock)
+      window.removeEventListener("keydown", tryUnlock)
+    }
+  }, [])
+
+  const syncMusic = useCallback((mode: SceneMode, opts?: { restart?: boolean; force?: boolean }) => {
+    const audio = backgroundAudioRef.current
+    if (!audio) return
+
+    const nextSrc = SCENE_MUSIC[mode]
+    const shouldPlay = opts?.force ?? (hasStarted && !startModalOpen)
+
+    if (!shouldPlay || !nextSrc) {
+      audio.pause()
+      audio.currentTime = 0
+      currentTrackRef.current = nextSrc ?? null
+      return
+    }
+
+    if (currentTrackRef.current !== nextSrc) {
+      audio.pause()
+      audio.currentTime = 0
+      audio.src = nextSrc
+      audio.load()
+      currentTrackRef.current = nextSrc
+    } else if (opts?.restart) {
+      audio.currentTime = 0
+    }
+
+    audio.loop = true
+    if (audio.paused) {
+      void audio.play().catch(() => {
+        needsUnlockRef.current = true
+      })
+    }
+  }, [hasStarted, startModalOpen])
+
+  const gotoScene = useCallback((next: SceneMode) => {
+    setSceneMode(next)
+    syncMusic(next, { restart: true, force: true })
+  }, [syncMusic])
+
+  useEffect(() => {
+    if (!hasStarted || startModalOpen) return
+    syncMusic(sceneMode)
+  }, [sceneMode, hasStarted, startModalOpen, syncMusic])
+
+  const startExperience = useCallback(() => {
+    setStartModalOpen(false)
+    setHasStarted(true)
+    syncMusic("birthday", { restart: true, force: true })
+  }, [syncMusic])
+
   // reflection/achievements (disabled for now)
   // useEffect(() => {
   //   if (sceneIndex !== 0 || !hasAnimationCompleted || isCandleLit) {
@@ -493,31 +588,6 @@ export default function App() {
   // }, [hasAnimationCompleted])
 
   useEffect(() => {
-    const audio = new Audio("/music.mp3")
-    audio.loop = true
-    audio.preload = "auto"
-    backgroundAudioRef.current = audio
-    return () => {
-      audio.pause()
-      backgroundAudioRef.current = null
-    }
-  }, [])
-
-  const playBackgroundMusic = useCallback(() => {
-    const audio = backgroundAudioRef.current
-    if (!audio) return
-    if (!audio.paused) return
-    audio.currentTime = 0
-    void audio.play().catch(() => {})
-  }, [])
-
-  const startExperience = useCallback(() => {
-    setStartModalOpen(false)
-    playBackgroundMusic()
-    setHasStarted(true)
-  }, [playBackgroundMusic])
-
-  useEffect(() => {
     if (sceneMode !== "birthday") return
     if (!hasAnimationCompleted) return
     if (isCandleLit) return
@@ -531,8 +601,8 @@ export default function App() {
 
   const goToCookie = useCallback(() => {
     setShowLookBackPrompt(false)
-    setSceneMode("cookie")
-  }, [])
+    gotoScene("cookie")
+  }, [gotoScene])
 
   const blowOut = useCallback(() => {
     setIsCandleLit(false)
@@ -651,11 +721,13 @@ export default function App() {
   return (
     <div className="App">
       {sceneMode === "cookie" ? (
-        <CookieScene onNextScene={() => setSceneMode("gym")} />
+        <CookieScene onNextScene={() => gotoScene("gym")} />
       ) : sceneMode === "gym" ? (
-        <GymScene onNextScene={() => setSceneMode("italian")} />
+        <GymScene onNextScene={() => gotoScene("italian")} />
       ) : sceneMode === "italian" ? (
-        <ItalianScene onNextScene={() => setSceneMode("next")} />
+        <ItalianScene onNextScene={() => gotoScene("dbd")} />
+      ) : sceneMode === "dbd" ? (
+        <DBD />
       ) : sceneMode === "next" ? (
         <NextScene />
       ) : (
