@@ -14,7 +14,6 @@ type SkillUI = {
 type Target = { kind: "gen"; id: string } | { kind: "gate" } | null
 type KillerStunKind = "none" | "hit" | "pallet"
 type SkillMode = "none" | "gen" | "hook"
-type GameState = "playing" | "gameover" | "win"
 
 const ASPECT = 1.50037
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
@@ -30,6 +29,13 @@ function describeArc(cx: number, cy: number, r: number, startDeg: number, endDeg
   const sweep = ((endDeg - startDeg) % 360 + 360) % 360
   const largeArcFlag = sweep > 180 ? 1 : 0
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`
+}
+
+type WorldHint = {
+  key: "SPACE"
+  text: string
+  x: number
+  y: number
 }
 
 export function DBD() {
@@ -115,38 +121,6 @@ export function DBD() {
     []
   )
 
-  const viewportRef = useRef<HTMLDivElement | null>(null)
-  const PANEL_W = 520
-  const PANEL_PAD = 18
-  const [panelPos, setPanelPos] = useState({ leftX: PANEL_PAD, rightX: PANEL_PAD, w: PANEL_W })
-
-  useEffect(() => {
-    const compute = () => {
-      const el = viewportRef.current
-      if (!el) return
-      const rect = el.getBoundingClientRect()
-      const leftX = Math.max(PANEL_PAD, rect.left - PANEL_W - PANEL_PAD)
-      const rightX = Math.min(window.innerWidth - PANEL_W - PANEL_PAD, rect.right + PANEL_PAD)
-      setPanelPos({ leftX, rightX, w: PANEL_W })
-    }
-
-    const onResize = () => compute()
-
-    const ro = new ResizeObserver(() => compute())
-    if (viewportRef.current) ro.observe(viewportRef.current)
-
-    compute()
-    window.addEventListener("resize", onResize)
-
-    return () => {
-      window.removeEventListener("resize", onResize)
-      ro.disconnect()
-    }
-  }, [])
-
-  const [gameState, setGameState] = useState<GameState>("playing")
-  const gameStateRef = useRef<GameState>("playing")
-
   const gensRef = useRef<GenState>(initialGens)
   const [gens, setGens] = useState<GenState>({ ...initialGens })
 
@@ -192,11 +166,14 @@ export function DBD() {
   const hookEscapeDoneRef = useRef(0)
   const hookNextSkillAtRef = useRef<number>(0)
 
-  const HOOK_FAIL_MAX = 3
-  const hookFailRef = useRef(0)
+  const HOOK_FAIL_LIMIT = 3
+  const hookFailCountRef = useRef(0)
 
-  const [hookCountUI, setHookCountUI] = useState(0)
+  const HOOK_UNHOOK_LIMIT = 2
+  const unhookCountRef = useRef(0)
+
   const hookCountRef = useRef(0)
+  const [hookCountUI, setHookCountUI] = useState(0)
 
   const [killerPos, setKillerPos] = useState({ x: 62, y: 44 })
   const killerPosRef = useRef(killerPos)
@@ -227,6 +204,13 @@ export function DBD() {
   const playerHurtUIRef = useRef(false)
 
   const playerHitsRef = useRef<number>(0)
+  const [playerHitsUI, setPlayerHitsUI] = useState(0)
+
+  const [gameOverUI, setGameOverUI] = useState(false)
+  const gameOverRef = useRef(false)
+
+  const [winUI, setWinUI] = useState(false)
+  const winRef = useRef(false)
 
   const keysRef = useRef<Record<Key, boolean>>({ w: false, a: false, s: false, d: false })
   const rafRef = useRef<number | null>(null)
@@ -263,9 +247,6 @@ export function DBD() {
   })
 
   const runAudioRef = useRef<HTMLAudioElement | null>(null)
-  const chaseMusicRef = useRef<HTMLAudioElement | null>(null)
-  const musicStartedRef = useRef(false)
-
   const skillAppearRef = useRef<HTMLAudioElement | null>(null)
   const skillSuccessRef = useRef<HTMLAudioElement | null>(null)
   const genBlowRef = useRef<HTMLAudioElement | null>(null)
@@ -279,17 +260,17 @@ export function DBD() {
   const lockerOpenRef = useRef<HTMLAudioElement | null>(null)
   const lockerCloseRef = useRef<HTMLAudioElement | null>(null)
   const unhookFailRef = useRef<HTMLAudioElement | null>(null)
-  const endRef = useRef<HTMLAudioElement | null>(null)
+
+  const chaseMusicRef = useRef<HTMLAudioElement | null>(null)
+  const chaseStartedRef = useRef(false)
+  const endMusicRef = useRef<HTMLAudioElement | null>(null)
 
   const gensCompletePlayedRef = useRef(false)
   const doorOpeningPlayedRef = useRef(false)
 
   const allGensDone = useMemo(() => Object.values(gens).every((g) => g.done), [gens])
-  const gensLeft = useMemo(() => Object.values(gens).filter((g) => !g.done).length, [gens])
-
-  useEffect(() => {
-    gameStateRef.current = gameState
-  }, [gameState])
+  const gensDoneCount = useMemo(() => Object.values(gens).filter((g) => g.done).length, [gens])
+  const gensLeft = useMemo(() => Math.max(0, GENS.length - gensDoneCount), [GENS.length, gensDoneCount])
 
   useEffect(() => {
     playerPosRef.current = playerPos
@@ -327,6 +308,59 @@ export function DBD() {
     hookedHookIdRef.current = hookedHookIdUI
   }, [hookedHookIdUI])
 
+  const playOneShot = (ref: MutableRefObject<HTMLAudioElement | null>) => {
+    const a = ref.current
+    if (!a) return
+    try {
+      a.pause()
+      a.currentTime = 0
+      void a.play()
+    } catch {}
+  }
+
+  const startChase = () => {
+    const a = chaseMusicRef.current
+    if (!a) return
+    if (gameOverRef.current || winRef.current) return
+    try {
+      a.loop = true
+      a.volume = 0.05
+      if (a.paused) {
+        a.currentTime = 0
+        void a.play()
+      }
+      chaseStartedRef.current = true
+    } catch {}
+  }
+
+  const stopChase = () => {
+    const a = chaseMusicRef.current
+    if (!a) return
+    try {
+      a.pause()
+      a.currentTime = 0
+    } catch {}
+  }
+
+  const startRun = () => {
+    const a = runAudioRef.current
+    if (!a) return
+    try {
+      a.loop = true
+      if (a.paused) a.currentTime = 0
+      void a.play()
+    } catch {}
+  }
+
+  const stopRun = () => {
+    const a = runAudioRef.current
+    if (!a) return
+    try {
+      a.pause()
+      a.currentTime = 0
+    } catch {}
+  }
+
   useEffect(() => {
     const VOL = 0.1
 
@@ -334,11 +368,6 @@ export function DBD() {
     run.loop = true
     run.volume = VOL
     runAudioRef.current = run
-
-    const chase = new Audio("/DBD/sounds/chase.mp3")
-    chase.loop = true
-    chase.volume = 0.05
-    chaseMusicRef.current = chase
 
     const a1 = new Audio("/DBD/sounds/skill-check.mp3")
     a1.volume = VOL
@@ -389,12 +418,18 @@ export function DBD() {
     lockerCloseRef.current = a12
 
     const a13 = new Audio("/DBD/sounds/unhook-fail.mp3")
-    a13.volume = 0.14
+    a13.volume = 0.18
     unhookFailRef.current = a13
 
-    const a14 = new Audio("/DBD/sounds/end.mp3")
-    a14.volume = 0.05
-    endRef.current = a14
+    const chase = new Audio("/DBD/sounds/chase.mp3")
+    chase.loop = true
+    chase.volume = 0.05
+    chaseMusicRef.current = chase
+
+    const end = new Audio("/DBD/sounds/end.mp3")
+    end.loop = false
+    end.volume = 0.05
+    endMusicRef.current = end
 
     return () => {
       try {
@@ -402,6 +437,9 @@ export function DBD() {
       } catch {}
       try {
         chase.pause()
+      } catch {}
+      try {
+        end.pause()
       } catch {}
     }
   }, [])
@@ -435,29 +473,17 @@ export function DBD() {
   }, [gate])
 
   useEffect(() => {
-    if (!allGensDone) return
+    startChase()
+  }, [])
 
-    if (!gensCompletePlayedRef.current) {
-      gensCompletePlayedRef.current = true
-      const a = gensCompleteRef.current
-      if (a) {
-        try {
-          a.pause()
-          a.currentTime = 0
-          void a.play()
-        } catch {}
-      }
+  const boundsRef = useRef({ left: 3.8, right: 3.8, top: 1.2, bottom: 3.8 })
+  const clampToBounds = (p: { x: number; y: number }) => {
+    const b = boundsRef.current
+    return {
+      x: clamp(p.x, b.left, 100 - b.right),
+      y: clamp(p.y, b.top, 100 - b.bottom),
     }
-
-    setGatePulse(true)
-    if (gatePulseTRef.current) window.clearTimeout(gatePulseTRef.current)
-    gatePulseTRef.current = window.setTimeout(() => setGatePulse(false), 5200)
-
-    return () => {
-      if (gatePulseTRef.current) window.clearTimeout(gatePulseTRef.current)
-      gatePulseTRef.current = null
-    }
-  }, [allGensDone])
+  }
 
   const pxDistTo = (a: { x: number; y: number }, b: { x: number; y: number }) => {
     const dx = (a.x - b.x) * ASPECT
@@ -516,12 +542,12 @@ export function DBD() {
     return nearestLocker.id
   }, [hiddenIn, nearestLocker])
 
-  const hiddenLockerPos = useMemo(() => {
-    if (!hiddenIn) return null
-    return LOCKERS.find((l) => l.id === hiddenIn) ?? null
-  }, [hiddenIn, LOCKERS])
+  const interactablePallet: PalletId | null = useMemo(() => {
+    if (hiddenIn) return null
+    if (isInteracting) return null
+    if (playerDownUI || playerCarriedUI || playerHookedUI) return null
+    if (gameOverUI || winUI) return null
 
-  const nearestPallet = useMemo(() => {
     let best: { id: PalletId; d: number } | null = null
     for (const p of PALLETS) {
       const st = palletsRef.current[p.id]
@@ -529,71 +555,28 @@ export function DBD() {
       const d = pxDistTo(playerPos, p)
       if (!best || d < best.d) best = { id: p.id, d }
     }
-    return best
-  }, [PALLETS, playerPos.x, playerPos.y])
+    if (!best) return null
+    if (best.d > RANGE_PALLET) return null
+    return best.id
+  }, [PALLETS, playerPos.x, playerPos.y, hiddenIn, isInteracting, playerDownUI, playerCarriedUI, playerHookedUI, gameOverUI, winUI])
 
-  const interactablePallet: PalletId | null = useMemo(() => {
-    if (!nearestPallet) return null
-    if (nearestPallet.d > RANGE_PALLET) return null
-    return nearestPallet.id
-  }, [nearestPallet])
+  useEffect(() => {
+    if (!allGensDone) return
 
-  const playOneShot = (ref: MutableRefObject<HTMLAudioElement | null>) => {
-    const a = ref.current
-    if (!a) return
-    try {
-      a.pause()
-      a.currentTime = 0
-      void a.play()
-    } catch {}
-  }
-
-  const ensureChaseMusic = () => {
-    if (musicStartedRef.current) return
-    musicStartedRef.current = true
-    const a = chaseMusicRef.current
-    if (!a) return
-    try {
-      a.loop = true
-      if (a.paused) a.currentTime = 0
-      void a.play()
-    } catch {}
-  }
-
-  const playEnd = () => {
-    const chase = chaseMusicRef.current
-    if (chase) {
-      try {
-        chase.pause()
-      } catch {}
+    if (!gensCompletePlayedRef.current) {
+      gensCompletePlayedRef.current = true
+      playOneShot(gensCompleteRef)
     }
-    const a = endRef.current
-    if (!a) return
-    try {
-      a.pause()
-      a.currentTime = 0
-      void a.play()
-    } catch {}
-  }
 
-  const startRun = () => {
-    const a = runAudioRef.current
-    if (!a) return
-    try {
-      a.loop = true
-      if (a.paused) a.currentTime = 0
-      void a.play()
-    } catch {}
-  }
+    setGatePulse(true)
+    if (gatePulseTRef.current) window.clearTimeout(gatePulseTRef.current)
+    gatePulseTRef.current = window.setTimeout(() => setGatePulse(false), 8000)
 
-  const stopRun = () => {
-    const a = runAudioRef.current
-    if (!a) return
-    try {
-      a.pause()
-      a.currentTime = 0
-    } catch {}
-  }
+    return () => {
+      if (gatePulseTRef.current) window.clearTimeout(gatePulseTRef.current)
+      gatePulseTRef.current = null
+    }
+  }, [allGensDone])
 
   const clearSkill = () => {
     skillModeRef.current = "none"
@@ -630,23 +613,13 @@ export function DBD() {
 
   const spawnSkill = (now: number, difficulty01: number, mode: SkillMode) => {
     const zoneWidth = clamp(0.18 - difficulty01 * 0.08, 0.09, 0.18)
-
     const minStart = 0.18
     const maxStart = 0.92 - zoneWidth
     const zoneStart = clamp(minStart + Math.random() * Math.max(0, maxStart - minStart), minStart, maxStart)
-
     const duration = clamp(2050 - difficulty01 * 320 + (Math.random() * 260 - 130), 1400, 2400)
 
     skillModeRef.current = mode
-    skillRef.current = {
-      active: true,
-      startedAt: now,
-      duration,
-      zoneStart,
-      zoneWidth,
-      resolved: false,
-    }
-
+    skillRef.current = { active: true, startedAt: now, duration, zoneStart, zoneWidth, resolved: false }
     setSkillUI({ active: true, p: 0, zoneStart, zoneWidth })
     playOneShot(skillAppearRef)
   }
@@ -666,6 +639,46 @@ export function DBD() {
       playOneShot(genDoneRef)
       stopInteract()
     }
+  }
+
+  const triggerGameOver = () => {
+    if (gameOverRef.current || winRef.current) return
+    gameOverRef.current = true
+    setGameOverUI(true)
+
+    clearMoveKeys()
+    if (stepRef.current) setIsStep(false)
+    if (killerStepRef.current) setKillerIsStep(false)
+
+    try {
+      stopRun()
+    } catch {}
+
+    stopChase()
+    playOneShot(endMusicRef)
+
+    if (interactingRef.current) stopInteract()
+    clearSkill()
+  }
+
+  const triggerWin = () => {
+    if (winRef.current || gameOverRef.current) return
+    winRef.current = true
+    setWinUI(true)
+
+    clearMoveKeys()
+    if (stepRef.current) setIsStep(false)
+    if (killerStepRef.current) setKillerIsStep(false)
+
+    try {
+      stopRun()
+    } catch {}
+
+    stopChase()
+    playOneShot(endMusicRef)
+
+    if (interactingRef.current) stopInteract()
+    clearSkill()
   }
 
   const resolveGenSkill = (now: number, success: boolean) => {
@@ -699,38 +712,14 @@ export function DBD() {
     scheduleNextSkill(now, difficulty01)
   }
 
-  const gameOver = () => {
-    if (gameStateRef.current !== "playing") return
-    setGameState("gameover")
-    playEnd()
-    stopRun()
-    clearMoveKeys()
-    if (stepRef.current) setIsStep(false)
-    if (skillRef.current.active) clearSkill()
-  }
-
-  const winGame = () => {
-    if (gameStateRef.current !== "playing") return
-    setGameState("win")
-    playEnd()
-    stopRun()
-    clearMoveKeys()
-    if (stepRef.current) setIsStep(false)
-    if (skillRef.current.active) clearSkill()
-  }
-
-  const beginHookEscape = (now: number) => {
-    hookEscapeDoneRef.current = 0
-    hookFailRef.current = 0
-    hookNextSkillAtRef.current = now + 900
-  }
-
-  const applyHookFail = () => {
+  const hookFail = (now: number) => {
     playOneShot(unhookFailRef)
-    hookFailRef.current += 1
-    if (hookFailRef.current >= HOOK_FAIL_MAX) {
-      gameOver()
+    hookFailCountRef.current = Math.min(HOOK_FAIL_LIMIT, hookFailCountRef.current + 1)
+    if (hookFailCountRef.current >= HOOK_FAIL_LIMIT) {
+      triggerGameOver()
+      return
     }
+    hookNextSkillAtRef.current = now + (1400 + Math.random() * 1200)
   }
 
   const resolveHookSkill = (now: number, success: boolean) => {
@@ -740,13 +729,15 @@ export function DBD() {
     setSkillUI({ active: false, p: 0, zoneStart: 0, zoneWidth: 0 })
 
     if (!playerHookedRef.current) return
-    if (gameStateRef.current !== "playing") return
+    if (gameOverRef.current || winRef.current) return
 
     if (success) {
       playOneShot(skillSuccessRef)
       hookEscapeDoneRef.current = Math.min(HOOK_ESCAPE_NEEDED, hookEscapeDoneRef.current + 1)
 
       if (hookEscapeDoneRef.current >= HOOK_ESCAPE_NEEDED) {
+        unhookCountRef.current = Math.min(HOOK_UNHOOK_LIMIT, unhookCountRef.current + 1)
+
         const hookId = hookedHookIdRef.current
         const hook = hookId ? HOOKS.find((h) => h.id === hookId) : null
 
@@ -756,6 +747,7 @@ export function DBD() {
         setHookedHookIdUI(null)
 
         playerHitsRef.current = 0
+        setPlayerHitsUI(0)
 
         playerDownRef.current = false
         setPlayerDownUI(false)
@@ -765,27 +757,27 @@ export function DBD() {
         setIsStep(false)
 
         if (hook) {
-          const ox = hook.x + 3.2
-          const oy = hook.y + 2.2
-          setPlayerPos({ x: clamp(ox, 3.5, 96.5), y: clamp(oy, 3.5, 96.5) })
+          const out = clampToBounds({ x: hook.x + 3.2, y: hook.y + 2.2 })
+          setPlayerPos(out)
         }
 
         playerInvulnUntilRef.current = now + 1400
         playerBoostUntilRef.current = now + 1600
 
-        killerIgnorePlayerUntilRef.current = Math.max(killerIgnorePlayerUntilRef.current, now + 4200)
+        killerIgnorePlayerUntilRef.current = Math.max(killerIgnorePlayerUntilRef.current, now + 3800)
         killerChasingRef.current = false
 
         hookEscapeDoneRef.current = 0
-        hookFailRef.current = 0
         hookNextSkillAtRef.current = 0
+        hookFailCountRef.current = 0
         return
       }
     } else {
-      applyHookFail()
+      hookFail(now)
+      return
     }
 
-    hookNextSkillAtRef.current = now + (1300 + Math.random() * 1300)
+    hookNextSkillAtRef.current = now + (1400 + Math.random() * 1200)
   }
 
   const attemptSkillPress = () => {
@@ -799,6 +791,7 @@ export function DBD() {
       if (!interactingRef.current) return false
     } else if (mode === "hook") {
       if (!playerHookedRef.current) return false
+      if (gameOverRef.current || winRef.current) return false
     } else {
       return false
     }
@@ -823,7 +816,8 @@ export function DBD() {
 
   const tryToggleLocker = () => {
     if (interactingRef.current) return false
-    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current) return false
+    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current || gameOverRef.current || winRef.current)
+      return false
 
     const currentlyHidden = hiddenInRef.current
     if (currentlyHidden) {
@@ -835,11 +829,8 @@ export function DBD() {
       clearMoveKeys()
       setIsStep(false)
 
-      const out = lastOutsidePosRef.current
-      setPlayerPos({
-        x: clamp(out.x, 3.5, 96.5),
-        y: clamp(out.y, 3.5, 96.5),
-      })
+      const out = clampToBounds(lastOutsidePosRef.current)
+      setPlayerPos(out)
       return true
     }
 
@@ -869,27 +860,40 @@ export function DBD() {
   const tryDropPallet = () => {
     if (interactingRef.current) return false
     if (hiddenInRef.current) return false
-    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current) return false
-    if (!interactablePallet) return false
+    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current || gameOverRef.current || winRef.current)
+      return false
 
-    palletsRef.current[interactablePallet] = { down: true }
+    const pos = playerPosRef.current
+    let best: { id: PalletId; d: number } | null = null
+
+    for (const p of PALLETS) {
+      const st = palletsRef.current[p.id]
+      if (!st || st.down) continue
+      const d = pxDistTo(pos, p)
+      if (!best || d < best.d) best = { id: p.id, d }
+    }
+
+    if (!best) return false
+    if (best.d > RANGE_PALLET) return false
+
+    palletsRef.current[best.id] = { down: true }
     setPallets({ ...palletsRef.current })
     playOneShot(palletDropRef)
 
-    const palletLayout = PALLETS.find((pp) => pp.id === interactablePallet)
+    const palletLayout = PALLETS.find((pp) => pp.id === best.id)
     if (palletLayout) {
       const kpos = killerPosRef.current
       const dK = pxDistTo(kpos, palletLayout)
-      const KILLER_PALLET_STUN_RANGE = 10.0
+      const KILLER_PALLET_STUN_RANGE = 12.0
       if (dK <= KILLER_PALLET_STUN_RANGE) {
         const now = performance.now()
-        const nextUntil = now + 3000
-        if (nextUntil > killerStunUntilRef.current) killerStunUntilRef.current = nextUntil
+        killerStunUntilRef.current = Math.max(killerStunUntilRef.current, now + 3000)
         killerStunKindRef.current = "pallet"
         if (killerStunKindUIRef.current !== "pallet") {
           killerStunKindUIRef.current = "pallet"
           setKillerStunKindUI("pallet")
         }
+        if (killerStepRef.current) setKillerIsStep(false)
         clearAllGenStuff()
       }
     }
@@ -900,7 +904,14 @@ export function DBD() {
   const startInteractOn = (t: Target) => {
     if (!t) return
     if (hiddenInRef.current) return
-    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current) return
+    if (
+      playerDownRef.current ||
+      playerCarriedRef.current ||
+      playerHookedRef.current ||
+      gameOverRef.current ||
+      winRef.current
+    )
+      return
     if (interactingRef.current) stopInteract()
 
     if (t.kind === "gen") {
@@ -939,12 +950,120 @@ export function DBD() {
     }
   }
 
+  const resetGame = () => {
+    gameOverRef.current = false
+    setGameOverUI(false)
+
+    winRef.current = false
+    setWinUI(false)
+
+    if (gatePulseTRef.current) window.clearTimeout(gatePulseTRef.current)
+    gatePulseTRef.current = null
+    setGatePulse(false)
+
+    gensCompletePlayedRef.current = false
+    doorOpeningPlayedRef.current = false
+
+    gensRef.current = { ...initialGens }
+    setGens({ ...initialGens })
+
+    palletsRef.current = { ...initialPallets }
+    setPallets({ ...initialPallets })
+
+    gateRef.current = { progress: 0, opened: false }
+    setGate({ progress: 0, opened: false })
+
+    clearMoveKeys()
+    setFacing("front")
+    facingRef.current = "front"
+    setIsStep(false)
+    stepRef.current = false
+    lastStepPulseRef.current = 0
+    stepUntilRef.current = 0
+
+    setPlayerPos({ x: 6.5, y: 70.5 })
+    playerPosRef.current = { x: 6.5, y: 70.5 }
+    lastOutsidePosRef.current = { x: 6.5, y: 70.5 }
+
+    hiddenInRef.current = null
+    setHiddenIn(null)
+
+    setActiveTarget(null)
+    activeTargetRef.current = null
+    setIsInteracting(false)
+    interactingRef.current = false
+
+    skillModeRef.current = "none"
+    skillRef.current = { active: false, startedAt: 0, duration: 0, zoneStart: 0, zoneWidth: 0, resolved: false }
+    setSkillUI({ active: false, p: 0, zoneStart: 0, zoneWidth: 0 })
+    nextSkillAtRef.current = 0
+    hookNextSkillAtRef.current = 0
+
+    playerHitsRef.current = 0
+    setPlayerHitsUI(0)
+    playerBoostUntilRef.current = 0
+    playerInvulnUntilRef.current = 0
+    playerHurtUIRef.current = false
+    setPlayerHurtUI(false)
+
+    unhookCountRef.current = 0
+    hookCountRef.current = 0
+    setHookCountUI(0)
+
+    playerDownPosRef.current = null
+    playerDownRef.current = false
+    setPlayerDownUI(false)
+
+    playerCarriedRef.current = false
+    setPlayerCarriedUI(false)
+
+    playerHookedRef.current = false
+    setPlayerHookedUI(false)
+    hookedHookIdRef.current = null
+    setHookedHookIdUI(null)
+    carryHookTargetRef.current = null
+
+    hookEscapeDoneRef.current = 0
+    hookFailCountRef.current = 0
+
+    killerPosRef.current = { x: 62, y: 44 }
+    setKillerPos({ x: 62, y: 44 })
+
+    killerFacingRef.current = "left"
+    setKillerFacing("left")
+
+    killerStepRef.current = false
+    setKillerIsStep(false)
+    killerLastStepPulseRef.current = 0
+    killerStepUntilRef.current = 0
+
+    killerWanderTargetRef.current = null
+    killerNextWanderPickAtRef.current = 0
+    killerChasingRef.current = false
+
+    killerStunUntilRef.current = 0
+    killerStunKindRef.current = "none"
+    killerStunKindUIRef.current = "none"
+    setKillerStunKindUI("none")
+
+    killerIgnorePlayerUntilRef.current = 0
+
+    chaseStartedRef.current = false
+    stopChase()
+    startChase()
+
+    try {
+      stopRun()
+    } catch {}
+  }
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      ensureChaseMusic()
+      startChase()
 
-      if (gameStateRef.current !== "playing") {
-        if (e.key === " " || e.code === "Space") e.preventDefault()
+      if (gameOverRef.current || winRef.current) {
+        if (e.repeat) return
+        e.preventDefault()
         return
       }
 
@@ -965,6 +1084,7 @@ export function DBD() {
           attemptSkillPress()
           return
         }
+
         if (k === "w" || k === "a" || k === "s" || k === "d") {
           if (e.repeat) return
           e.preventDefault()
@@ -982,33 +1102,27 @@ export function DBD() {
         e.preventDefault()
 
         if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current) return
-
-        if (interactingRef.current) {
-          if (attemptSkillPress()) return
-          stopInteract()
-          return
-        }
-
-        const t = interactableTarget
-        if (t && !hiddenInRef.current) {
-          startInteractOn(t)
-          return
-        }
+        if (attemptSkillPress()) return
 
         if (hiddenInRef.current) {
           tryToggleLocker()
           return
         }
 
-        if (interactableLocker) {
-          tryToggleLocker()
+        const t = interactableTarget
+        if (t) {
+          const cur = activeTargetRef.current
+          const same =
+            !!cur &&
+            ((cur.kind === "gen" && t.kind === "gen" && cur.id === t.id) || (cur.kind === "gate" && t.kind === "gate"))
+
+          if (interactingRef.current && same) stopInteract()
+          else startInteractOn(t)
           return
         }
 
-        if (interactablePallet) {
-          tryDropPallet()
-          return
-        }
+        if (tryToggleLocker()) return
+        if (tryDropPallet()) return
       }
     }
 
@@ -1025,11 +1139,9 @@ export function DBD() {
       window.removeEventListener("keydown", onKeyDown as any)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [interactableTarget, interactableLocker, interactablePallet, allGensDone])
+  }, [interactableTarget, allGensDone, PALLETS, LOCKERS])
 
   useEffect(() => {
-    const PAD = 3.5
-
     const STEP_PULSE_MS = 1000
     const STEP_SHOW_MS = 220
 
@@ -1043,21 +1155,27 @@ export function DBD() {
     const KILLER_SPEED = 18
     const KILLER_CARRY_SPEED = 16
 
-    const KILLER_START_CHASE_RANGE = 60.0
+    const KILLER_START_CHASE_RANGE = 45.0
     const KILLER_STOP_RANGE = 2.0
 
-    const KILLER_HIT_RANGE = 9.0
-    const KILLER_HIT_STUN_MS = 1000
+    const KILLER_HIT_RANGE = 10.0
+    const KILLER_HIT_STUN_MS = 3000
 
     const KILLER_PICKUP_RANGE = 2.0
     const KILLER_HOOK_RANGE = 2.5
 
     const HOOK_SKILL_RETRY_MS = 900
 
-    const pickWanderTarget = () => ({
-      x: PAD + Math.random() * (100 - PAD * 2),
-      y: PAD + Math.random() * (100 - PAD * 2),
-    })
+    const WIN_Y_THRESHOLD = 2.15
+    const WIN_X_RANGE = 11.0
+
+    const pickWanderTarget = () => {
+      const b = boundsRef.current
+      return {
+        x: b.left + Math.random() * (100 - b.left - b.right),
+        y: b.top + Math.random() * (100 - b.top - b.bottom),
+      }
+    }
 
     const pickWanderTargetFarFrom = (from: { x: number; y: number }, minD: number) => {
       for (let i = 0; i < 12; i++) {
@@ -1124,15 +1242,21 @@ export function DBD() {
       return best?.id ?? (HOOKS[0]?.id ?? null)
     }
 
-    const tick = (t: number) => {
-      const last = lastRef.current ?? t
-      const dt = (t - last) / 1000
-      lastRef.current = t
+    const beginHookEscape = (now: number) => {
+      hookEscapeDoneRef.current = 0
+      hookFailCountRef.current = 0
+      hookNextSkillAtRef.current = now + 800
+    }
 
-      if (gameStateRef.current !== "playing") {
+    const tick = (t: number) => {
+      if (gameOverRef.current || winRef.current) {
         rafRef.current = requestAnimationFrame(tick)
         return
       }
+
+      const last = lastRef.current ?? t
+      const dt = (t - last) / 1000
+      lastRef.current = t
 
       const killerStunned = t < killerStunUntilRef.current
       const stunKindNow: KillerStunKind = killerStunned ? killerStunKindRef.current : "none"
@@ -1162,29 +1286,32 @@ export function DBD() {
         ) {
           const ppos = playerPosRef.current
           const dHit = pxDistTo(kpos, ppos)
-
           if (dHit <= KILLER_HIT_RANGE) {
             playOneShot(jumpscareRef)
 
-            playerHitsRef.current = Math.min(2, playerHitsRef.current + 1)
+            const nextHits = Math.min(2, playerHitsRef.current + 1)
+            playerHitsRef.current = nextHits
+            setPlayerHitsUI(nextHits)
 
-            if (playerHitsRef.current >= 2) {
-              if (hookCountRef.current >= 2) {
-                gameOver()
-              } else {
-                setPlayerHurtIfNeeded(false)
-                playerBoostUntilRef.current = 0
-                playerInvulnUntilRef.current = t + 999999999
-
-                setPlayerDownIfNeeded(true)
-                playerDownPosRef.current = { x: ppos.x, y: ppos.y }
-                forceStopPlayer()
-
-                carryHookTargetRef.current = null
-                setPlayerCarriedIfNeeded(false)
-                setPlayerHookedIfNeeded(false)
-                setHookedHookIdIfNeeded(null)
+            if (nextHits >= 2) {
+              if (unhookCountRef.current >= HOOK_UNHOOK_LIMIT) {
+                triggerGameOver()
+                rafRef.current = requestAnimationFrame(tick)
+                return
               }
+
+              setPlayerHurtIfNeeded(false)
+              playerBoostUntilRef.current = 0
+              playerInvulnUntilRef.current = t + 999999999
+
+              setPlayerDownIfNeeded(true)
+              playerDownPosRef.current = { x: ppos.x, y: ppos.y }
+              forceStopPlayer()
+
+              carryHookTargetRef.current = null
+              setPlayerCarriedIfNeeded(false)
+              setPlayerHookedIfNeeded(false)
+              setHookedHookIdIfNeeded(null)
             } else {
               playerInvulnUntilRef.current = t + PLAYER_BOOST_MS
               playerBoostUntilRef.current = t + PLAYER_BOOST_MS
@@ -1229,15 +1356,21 @@ export function DBD() {
 
               const dHook = pxDistTo(kpos, hook)
               if (dHook <= KILLER_HOOK_RANGE) {
+                if (unhookCountRef.current >= HOOK_UNHOOK_LIMIT) {
+                  triggerGameOver()
+                  rafRef.current = requestAnimationFrame(tick)
+                  return
+                }
+
                 setPlayerCarriedIfNeeded(false)
                 setPlayerDownIfNeeded(false)
                 setPlayerHookedIfNeeded(true)
                 setHookedHookIdIfNeeded(hook.id)
+                playOneShot(hookedRef)
 
-                hookCountRef.current = Math.min(2, hookCountRef.current + 1)
+                hookCountRef.current = Math.min(HOOK_UNHOOK_LIMIT, hookCountRef.current + 1)
                 setHookCountUI(hookCountRef.current)
 
-                playOneShot(hookedRef)
                 beginHookEscape(t)
 
                 killerIgnorePlayerUntilRef.current = t + 5200
@@ -1300,23 +1433,27 @@ export function DBD() {
             }
             if (killerStepRef.current && t >= killerStepUntilRef.current) setKillerIsStep(false)
 
-            const nx = clamp(kpos.x + (ux / ASPECT) * speed * dt, PAD, 100 - PAD)
-            const ny = clamp(kpos.y + uy * speed * dt, PAD, 100 - PAD)
-
-            if (nx !== kpos.x || ny !== kpos.y) setKillerPos({ x: nx, y: ny })
+            const nextPos = clampToBounds({ x: kpos.x + (ux / ASPECT) * speed * dt, y: kpos.y + uy * speed * dt })
+            if (nextPos.x !== kpos.x || nextPos.y !== kpos.y) setKillerPos(nextPos)
           } else {
             if (killerStepRef.current) setKillerIsStep(false)
           }
         }
       }
 
-      const gateOpenNow = gateRef.current.opened
-      if (!hiddenInRef.current && !playerDownRef.current && !playerCarriedRef.current && !playerHookedRef.current && gateOpenNow) {
+      if (
+        gateRef.current.opened &&
+        !hiddenInRef.current &&
+        !playerDownRef.current &&
+        !playerCarriedRef.current &&
+        !playerHookedRef.current
+      ) {
         const p = playerPosRef.current
-        const inExitX = Math.abs(p.x - GATE.x) <= 12
-        const inExitY = p.y <= 3.2
-        if (inExitX && inExitY) {
-          winGame()
+        const dx = Math.abs((p.x - GATE.x) * ASPECT)
+        if (p.y <= WIN_Y_THRESHOLD && dx <= WIN_X_RANGE) {
+          triggerWin()
+          rafRef.current = requestAnimationFrame(tick)
+          return
         }
       }
 
@@ -1336,8 +1473,10 @@ export function DBD() {
 
           if (p >= 1 && !skillRef.current.resolved) {
             clearSkill()
-            applyHookFail()
-            hookNextSkillAtRef.current = t + HOOK_SKILL_RETRY_MS
+            hookFail(t)
+            if (!gameOverRef.current && !winRef.current) {
+              hookNextSkillAtRef.current = t + HOOK_SKILL_RETRY_MS
+            }
           }
         } else {
           if (skillUI.active && skillModeRef.current !== "gen") {
@@ -1374,10 +1513,7 @@ export function DBD() {
 
           if (stepRef.current && t >= stepUntilRef.current) setIsStep(false)
 
-          setPlayerPos((p) => ({
-            x: clamp(p.x + mx * speed * dt, PAD, 100 - PAD),
-            y: clamp(p.y + my * speed * dt, PAD, 100 - PAD),
-          }))
+          setPlayerPos((p) => clampToBounds({ x: p.x + mx * speed * dt, y: p.y + my * speed * dt }))
         } else {
           if (stepRef.current) setIsStep(false)
         }
@@ -1424,7 +1560,9 @@ export function DBD() {
                     resolveGenSkill(now, false)
                   }
                 } else {
-                  if (skillUI.active && skillModeRef.current === "gen") setSkillUI({ active: false, p: 0, zoneStart: 0, zoneWidth: 0 })
+                  if (skillUI.active && skillModeRef.current === "gen") {
+                    setSkillUI({ active: false, p: 0, zoneStart: 0, zoneWidth: 0 })
+                  }
                 }
               }
             }
@@ -1462,11 +1600,17 @@ export function DBD() {
           if (skillModeRef.current === "gen") clearSkill()
         }
       } else {
-        clearAllGenStuff()
-        stopRun()
-        clearMoveKeys()
-        if (stepRef.current) setIsStep(false)
-        if (skillModeRef.current === "gen") clearSkill()
+        if (hiddenInRef.current) {
+          if (stepRef.current) setIsStep(false)
+          if (skillModeRef.current === "gen") clearSkill()
+          clearAllGenStuff()
+        } else {
+          clearAllGenStuff()
+          stopRun()
+          clearMoveKeys()
+          if (stepRef.current) setIsStep(false)
+          if (skillModeRef.current === "gen") clearSkill()
+        }
       }
 
       rafRef.current = requestAnimationFrame(tick)
@@ -1476,17 +1620,12 @@ export function DBD() {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
-  }, [GENS, HOOKS, PALLETS, GATE, allGensDone])
+  }, [GENS, skillUI.active, allGensDone, GATE, HOOKS, PALLETS, initialGens, initialPallets])
 
   const playerSrcNormal = (() => {
     if (facing === "front") return isStep ? "/DBD/player/front-step.png" : "/DBD/player/front.png"
     if (facing === "back") return isStep ? "/DBD/player/back-step.png" : "/DBD/player/back.png"
     return isStep ? "/DBD/player/side-step.png" : "/DBD/player/side.png"
-  })()
-
-  const faceSrc = (() => {
-    if (playerHitsRef.current >= 1) return "/DBD/hud/injured.png"
-    return "/DBD/hud/normal.png"
   })()
 
   const killerSrc = (() => {
@@ -1499,44 +1638,19 @@ export function DBD() {
   })()
 
   const killerRenderScale = (() => {
-    if (killerStunKindUI === "pallet") return 0.72
+    if (killerStunKindUI === "pallet") return 0.88
     if (playerCarriedUI) return 1.2
     if (killerIsStep) return 1
     return 1.3
   })()
-
-  const hudPos = useMemo(() => {
-    if (interactingRef.current && activeTargetRef.current) {
-      const t = activeTargetRef.current
-      if (t.kind === "gen") {
-        const g = GENS.find((x) => x.id === t.id)
-        if (!g) return null
-        return { x: g.x, y: g.y, kind: "gen" as const, id: t.id }
-      }
-      return { x: GATE.x, y: GATE.y, kind: "gate" as const, id: null as any }
-    }
-    if (interactableTarget) {
-      if (interactableTarget.kind === "gen") {
-        const g = GENS.find((x) => x.id === interactableTarget.id)
-        if (!g) return null
-        return { x: g.x, y: g.y, kind: "gen" as const, id: interactableTarget.id }
-      }
-      return { x: GATE.x, y: GATE.y, kind: "gate" as const, id: null as any }
-    }
-    return null
-  }, [GENS, GATE.x, GATE.y, interactableTarget])
-
-  const palletHintPos = useMemo(() => {
-    if (!interactablePallet) return null
-    const p = PALLETS.find((x) => x.id === interactablePallet)
-    return p ? { x: p.x, y: p.y } : null
-  }, [interactablePallet, PALLETS])
 
   const activeProgress = useMemo(() => {
     if (!isInteracting || !activeTarget) return 0
     if (activeTarget.kind === "gen") return gens[activeTarget.id as GenId]?.progress ?? 0
     return gate.progress
   }, [isInteracting, activeTarget, gens, gate.progress])
+
+  const isWorkingOnGen = isInteracting && !!activeTarget && activeTarget.kind === "gen"
 
   const SWEEP_START = -135
   const SWEEP_DEG = 270
@@ -1560,124 +1674,79 @@ export function DBD() {
 
   const downPos = playerDownUI ? playerDownPosRef.current : null
 
-  const showPlayerNormal = !hiddenIn && !playerCarriedUI && !playerHookedUI && !playerDownUI
+  const showPlayerNormal =
+    !hiddenIn &&
+    !playerCarriedUI &&
+    !playerHookedUI &&
+    !playerDownUI &&
+    !(isInteracting && activeTarget?.kind === "gen")
+
   const showPlayerDown = !hiddenIn && playerDownUI && !playerCarriedUI && !playerHookedUI && !!downPos
 
-  const resetGame = () => {
-    setGameState("playing")
-    gameStateRef.current = "playing"
+  const worldHints: WorldHint[] = useMemo(() => {
+    if (gameOverUI || winUI) return []
+    if (playerDownUI || playerCarriedUI) return []
+    if (playerHookedUI) return []
+    if (skillUI.active) return []
 
-    gensCompletePlayedRef.current = false
-    doorOpeningPlayedRef.current = false
-
-    gensRef.current = { ...initialGens }
-    setGens({ ...initialGens })
-
-    palletsRef.current = { ...initialPallets }
-    setPallets({ ...initialPallets })
-
-    gateRef.current = { progress: 0, opened: false }
-    setGate({ progress: 0, opened: false })
-
-    setGatePulse(false)
-    if (gatePulseTRef.current) window.clearTimeout(gatePulseTRef.current)
-    gatePulseTRef.current = null
-
-    setPlayerPos({ x: 6.5, y: 70.5 })
-    setFacing("front")
-    setIsStep(false)
-
-    setActiveTarget(null)
-    setIsInteracting(false)
-    activeTargetRef.current = null
-    interactingRef.current = false
-
-    hiddenInRef.current = null
-    setHiddenIn(null)
-    lastOutsidePosRef.current = { x: 6.5, y: 70.5 }
-
-    playerDownRef.current = false
-    setPlayerDownUI(false)
-    playerDownPosRef.current = null
-
-    playerCarriedRef.current = false
-    setPlayerCarriedUI(false)
-
-    playerHookedRef.current = false
-    setPlayerHookedUI(false)
-    hookedHookIdRef.current = null
-    setHookedHookIdUI(null)
-    carryHookTargetRef.current = null
-
-    hookEscapeDoneRef.current = 0
-    hookNextSkillAtRef.current = 0
-    hookFailRef.current = 0
-
-    hookCountRef.current = 0
-    setHookCountUI(0)
-
-    killerChasingRef.current = false
-    killerWanderTargetRef.current = null
-    killerNextWanderPickAtRef.current = 0
-
-    killerStunUntilRef.current = 0
-    killerStunKindRef.current = "none"
-    killerStunKindUIRef.current = "none"
-    setKillerStunKindUI("none")
-
-    killerIgnorePlayerUntilRef.current = 0
-    playerBoostUntilRef.current = 0
-    playerInvulnUntilRef.current = 0
-    playerHitsRef.current = 0
-    playerHurtUIRef.current = false
-    setPlayerHurtUI(false)
-
-    setKillerPos({ x: 62, y: 44 })
-    setKillerFacing("left")
-    setKillerIsStep(false)
-
-    clearMoveKeys()
-    clearSkill()
-    stopRun()
-
-    const endA = endRef.current
-    if (endA) {
-      try {
-        endA.pause()
-        endA.currentTime = 0
-      } catch {}
+    if (hiddenIn) {
+      const lid = hiddenIn
+      const loc = LOCKERS.find((l) => l.id === lid)
+      if (!loc) return []
+      return [{ key: "SPACE", text: "Press SPACE", x: loc.x, y: loc.y - 7.5 }]
     }
 
-    const chase = chaseMusicRef.current
-    if (chase) {
-      try {
-        chase.pause()
-        chase.currentTime = 0
-      } catch {}
+    const out: WorldHint[] = []
+
+    if (!isInteracting && interactableTarget) {
+      if (interactableTarget.kind === "gen") {
+        const loc = GENS.find((g) => g.id === interactableTarget.id)
+        if (loc) out.push({ key: "SPACE", text: "Press SPACE", x: loc.x, y: loc.y - 9.5 })
+      } else if (interactableTarget.kind === "gate") {
+        out.push({ key: "SPACE", text: "Press SPACE", x: GATE.x, y: GATE.y - 7.5 })
+      }
     }
-    musicStartedRef.current = false
-  }
 
-  const showOverlay = gameState !== "playing"
-  const overlayImg = gameState === "gameover" ? "/DBD/world/game-over.png" : "/DBD/world/win.png"
+    if (!isInteracting && interactableLocker) {
+      const loc = LOCKERS.find((l) => l.id === interactableLocker)
+      if (loc) out.push({ key: "SPACE", text: "Press SPACE", x: loc.x, y: loc.y - 8.5 })
+    }
 
-  const hintText = (() => {
-    if (gameStateRef.current !== "playing") return null
-    if (playerDownUI || playerCarriedUI || playerHookedUI) return null
-    if (hiddenInRef.current) return "Press Space to exit"
-    if (interactingRef.current) return null
-    if (hudPos?.kind === "gen") return "Press Space to repair"
-    if (hudPos?.kind === "gate") return "Press Space to open"
-    return null
-  })()
+    if (!isInteracting && interactablePallet) {
+      const loc = PALLETS.find((p) => p.id === interactablePallet)
+      if (loc) out.push({ key: "SPACE", text: "Press SPACE", x: loc.x, y: loc.y - 8.5 })
+    }
 
-  const showLockerHint = !hiddenIn && interactableLocker && !playerDownUI && !playerCarriedUI && !playerHookedUI && !interactingRef.current
-  const showPalletHint = !hiddenIn && !!interactablePallet && !playerDownUI && !playerCarriedUI && !playerHookedUI && !interactingRef.current
+    return out.slice(0, 2)
+  }, [
+    gameOverUI,
+    winUI,
+    playerDownUI,
+    playerCarriedUI,
+    playerHookedUI,
+    skillUI.active,
+    hiddenIn,
+    isInteracting,
+    interactableTarget,
+    interactableLocker,
+    interactablePallet,
+    GENS,
+    PALLETS,
+    LOCKERS,
+    GATE,
+  ])
+
+  const faceSrc =
+    playerHitsUI === 0 && !playerDownUI && !playerCarriedUI && !playerHookedUI
+      ? "/DBD/hud/normal.png"
+      : "/DBD/hud/injured.png"
+
+  const isTallyOn = (idx: 1 | 2) => hookCountUI >= idx
 
   return (
     <>
       <style>{`
-        .dbd-shell {
+        .dbd-root {
           position: fixed;
           inset: 0;
           width: 100vw;
@@ -1686,172 +1755,19 @@ export function DBD() {
           background: #000;
         }
 
-        .dbd-stage {
+        .dbd-shell {
           position: absolute;
           inset: 0;
+          width: 100%;
+          height: 100%;
           display: grid;
           place-items: center;
-          pointer-events: none;
         }
 
         .dbd-viewport {
           position: relative;
-          height: 100vh;
-          aspect-ratio: 1.50037 / 1;
-          width: auto;
-          max-width: 100vw;
-          max-height: 100vh;
-          pointer-events: auto;
-        }
-
-        .dbd-side {
-          position: absolute;
-          top: 18px;
-          bottom: 18px;
-          width: 520px;
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-          pointer-events: auto;
-          z-index: 50;
-        }
-
-        .dbd-bloody-title {
-          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
-          font-weight: 900;
-          font-size: 28px;
-          line-height: 1.08;
-          letter-spacing: 0.5px;
-          color: #a90000;
-          text-transform: uppercase;
-          text-shadow:
-            0 2px 0 rgba(0,0,0,0.85),
-            0 0 14px rgba(255,0,0,0.55),
-            0 0 28px rgba(255,0,0,0.25);
-          filter: drop-shadow(0 18px 26px rgba(0,0,0,0.55));
-          user-select: none;
-        }
-
-        .dbd-side__card {
-          border-radius: 22px;
-          padding: 18px 16px;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.10);
-          box-shadow: 0 18px 42px rgba(0,0,0,0.55);
-        }
-
-        .dbd-side__title {
-          margin: 0 0 14px 0;
-          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
-          font-size: 22px;
-          line-height: 1.25;
-          font-weight: 800;
-          color: rgba(255,255,255,0.92);
-        }
-
-        .dbd-legend {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .dbd-legend__row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
-          font-size: 20px;
-          font-weight: 800;
-          color: rgba(255,255,255,0.92);
-        }
-
-        .dbd-keycap {
-          min-width: 70px;
-          height: 52px;
-          padding: 0 16px;
-          border-radius: 16px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(0,0,0,0.65);
-          border: 2px solid rgba(255,255,255,0.18);
-          box-shadow: 0 10px 26px rgba(0,0,0,0.45);
-          font-size: 21px;
-          font-weight: 900;
-          letter-spacing: 0.6px;
-          user-select: none;
-        }
-
-        .dbd-hud {
-          display: flex;
-          flex-direction: column;
-          gap: 18px;
-          align-items: center;
-        }
-
-        .dbd-hud__row {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          width: 100%;
-        }
-
-        .dbd-hud__num {
-          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
-          font-weight: 1000;
-          font-size: 120px;
-          line-height: 1;
-          color: rgba(255,255,255,0.95);
-          text-shadow: 0 18px 42px rgba(0,0,0,0.65);
-          width: auto;
-          min-width: 0;
-          text-align: right;
-          user-select: none;
-        }
-
-        .dbd-hud__icon {
-          width: 400px;
-          height: 400px;
-          object-fit: contain;
-          display: block;
-          filter: drop-shadow(0 20px 36px rgba(0,0,0,0.7));
-          user-select: none;
-          -webkit-user-drag: none;
-          pointer-events: none;
-          flex: 0 0 auto;
-        }
-
-        .dbd-hud__face {
-          width: 400px;
-          height: 400px;
-          object-fit: contain;
-          display: block;
-          filter: drop-shadow(0 20px 36px rgba(0,0,0,0.7));
-          user-select: none;
-          -webkit-user-drag: none;
-          pointer-events: none;
-          flex: 0 0 auto;
-        }
-
-        .dbd-hook-tally {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .dbd-hook-tally__i {
-          width: 22px;
-          height: 190px;
-          border-radius: 16px;
-          border: 5px solid rgba(0,0,0,0.95);
-          background: transparent;
-          box-shadow: 0 18px 36px rgba(0,0,0,0.55);
-          flex: 0 0 auto;
-        }
-
-        .dbd-hook-tally__i.is-filled {
-          background: rgba(255,255,255,0.92);
+          width: min(100vw, calc(100vh * 1.50037));
+          height: min(100vh, calc(100vw * 0.66655));
         }
 
         .dbd-map {
@@ -1865,6 +1781,192 @@ export function DBD() {
           pointer-events: none;
         }
 
+        .dbd-side {
+          position: fixed;
+          top: 0;
+          bottom: 0;
+width: clamp(
+  0px,
+  calc((100vw - min(100vw, calc(100vh * 1.50037))) / 2),
+  700px
+);
+           padding: 10px 10px;
+
+          overflow: hidden;
+          color: rgba(255,255,255,0.92);
+          pointer-events: none;
+          z-index: 500;
+          container-type: inline-size;
+        }
+
+        .dbd-side--left { left: 0; }
+        .dbd-side--right { right: 0; display: flex; justify-content: flex-start; }
+
+        .dbd-side__card {
+          pointer-events: none;
+          width: 100%;
+          background: rgba(0,0,0,0.55);
+          border: 1px solid rgba(255,255,255,0.22);
+          border-radius: 18px;
+          padding: 10px 10px;
+  box-sizing: border-box;
+          box-shadow: 0 14px 36px rgba(0,0,0,0.4);
+          overflow: hidden;
+        }
+
+        .dbd-side__brand {
+          margin: 0 0 clamp(10px, 5cqw, 14px) 0;
+          font-weight: 900;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          font-size: clamp(14px, 6.4cqw, 20px);
+          line-height: 1.15;
+          color: rgba(255, 70, 70, 0.95);
+          text-shadow:
+            0 2px 0 rgba(0,0,0,0.8),
+            0 10px 26px rgba(0,0,0,0.55);
+        }
+
+        .dbd-side__title {
+          font-size: clamp(14px, 5.2cqw, 18px);
+          line-height: 1.25;
+          letter-spacing: 0.01em;
+          margin: 0 0 clamp(12px, 6cqw, 16px) 0;
+          opacity: 0.95;
+        }
+
+        .dbd-legend {
+          display: grid;
+          gap: clamp(10px, 4.8cqw, 14px);
+        }
+
+        .dbd-legend__row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: clamp(10px, 5cqw, 14px);
+          font-size: clamp(14px, 5.2cqw, 18px);
+          opacity: 0.95;
+          white-space: nowrap;
+        }
+
+        .dbd-legend__keys {
+          display: inline-flex;
+          gap: clamp(8px, 3.4cqw, 12px);
+          align-items: center;
+          flex-wrap: wrap;
+        }
+
+        .dbd-keycap {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: clamp(44px, 16cqw, 78px);
+          height: clamp(36px, 13.5cqw, 60px);
+          padding: 0 clamp(10px, 4.6cqw, 16px);
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.24);
+          background: rgba(255,255,255,0.08);
+          font-weight: 900;
+          letter-spacing: 0.06em;
+          font-size: clamp(13px, 5.2cqw, 20px);
+        }
+
+        .dbd-hud {
+          width: 100%;
+          display: grid;
+          gap: clamp(12px, 6cqw, 18px);
+        }
+
+        .dbd-hud__row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: clamp(10px, 5cqw, 16px);
+        }
+
+        .dbd-hud__gens {
+          display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+        }
+
+        .dbd-hud__gens,
+.dbd-hud__health {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  width: 100%;
+}
+
+        .dbd-hud__num {
+          font-size: 120px;          /* smaller */
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: rgba(255,255,255,0.98);
+  min-width: 0;
+  text-align: left;
+  transform: translateX(22px); /* less to the right */
+  pointer-events: none;
+        }
+
+.dbd-hud__icon {
+  width: 400px;
+  height: 400px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  transform: translateX(-90px); /* more left */
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
+}
+
+        .dbd-hud__health {
+          display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+        }
+
+.dbd-hud__face {
+  width: 400px;
+  height: 400px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  transform: translateX(-30px); /* more left */
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
+}
+
+        .dbd-hook-tally {
+          display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  transform: translateX(69px);
+        }
+
+        .dbd-hook-tally__i {
+          width: clamp(12px, 4.2cqw, 22px);
+          height: clamp(52px, 16cqw, 110px);
+          border-radius: 999px;
+          border: 2px solid rgba(0,0,0,0.95);
+          background: rgba(255,255,255,0);
+          box-shadow: 0 8px 16px rgba(0,0,0,0.25);
+        }
+
+        .dbd-hook-tally__i--on {
+          background: rgba(255,255,255,0.96);
+        }
+
         .dbd-gate {
           position: absolute;
           left: var(--gate-x, 50%);
@@ -1876,14 +1978,14 @@ export function DBD() {
           -webkit-user-drag: none;
           pointer-events: none;
           z-index: 2;
-          transition: filter 520ms ease;
+          transition: filter 420ms ease;
         }
 
         .dbd-gate--pulse {
           filter:
-            brightness(1.9)
-            contrast(1.2)
-            drop-shadow(0 0 18px rgba(255,255,255,0.9))
+            brightness(1.7)
+            contrast(1.15)
+            drop-shadow(0 0 14px rgba(255,255,255,0.8))
             drop-shadow(0 0 44px rgba(255,255,255,0.38));
         }
 
@@ -1934,7 +2036,7 @@ export function DBD() {
         .dbd-player--hurt {
           filter:
             drop-shadow(0 0 12px rgba(255, 0, 0, 0.95))
-            drop-shadow(0 0 28px rgba(255, 0, 0, 0.55));
+            drop-shadow(0 0 26px rgba(255, 0, 0, 0.55));
         }
 
         .dbd-killer {
@@ -1958,28 +2060,6 @@ export function DBD() {
 
         .dbd-player--flip .dbd-player__img { transform: scaleX(-1); transform-origin: center; }
         .dbd-killer--flip .dbd-killer__img { transform: scaleX(-1); transform-origin: center; }
-
-        .dbd-hint {
-          position: absolute;
-          left: var(--x, 50%);
-          top: var(--y, 50%);
-          transform: translate(-50%, calc(-100% - 26px));
-          z-index: 12;
-          pointer-events: none;
-          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-        }
-
-        .dbd-hint__pill {
-          color: #eaeaea;
-          background: rgba(0,0,0,0.62);
-          border: 1px solid rgba(255,255,255,0.14);
-          padding: 10px 14px;
-          border-radius: 12px;
-          font-size: 18px;
-          line-height: 1.2;
-          white-space: nowrap;
-          box-shadow: 0 10px 26px rgba(0,0,0,0.35);
-        }
 
         .dbd-progress {
           position: absolute;
@@ -2017,8 +2097,8 @@ export function DBD() {
 
         .skill-wrap {
           position: relative;
-          width: min(300px, 72vw);
-          height: min(300px, 72vw);
+          width: min(260px, 62vw);
+          height: min(260px, 62vw);
           filter: drop-shadow(0 14px 26px rgba(0,0,0,0.45));
         }
 
@@ -2028,77 +2108,150 @@ export function DBD() {
           display: block;
         }
 
-        .skill-center {
+        .skill-key {
           position: absolute;
           left: 50%;
           top: 50%;
           transform: translate(-50%, -50%);
-          display: grid;
-          place-items: center;
-          gap: 10px;
-        }
-
-        .skill-pill {
-          padding: 12px 20px;
-          border-radius: 14px;
-          background: rgba(0,0,0,0.65);
-          border: 2px solid rgba(255,255,255,0.85);
-          color: rgba(255,255,255,0.95);
-          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
-          font-size: 22px;
-          letter-spacing: 0.6px;
-          line-height: 1;
+          font-size: 14px;
+          letter-spacing: 0.06em;
+          color: rgba(255,255,255,0.94);
+          background: rgba(0,0,0,0.62);
+          border: 1px solid rgba(255,255,255,0.28);
+          border-radius: 10px;
+          padding: 8px 10px;
           user-select: none;
+          pointer-events: none;
         }
 
-        .dbd-overlay {
+        .dbd-hint-world {
+          position: absolute;
+          left: var(--x, 50%);
+          top: var(--y, 50%);
+          transform: translate(-50%, -100%);
+          z-index: 60;
+          pointer-events: none;
+        }
+
+        .dbd-hint {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          background: rgba(0,0,0,0.62);
+          border: 1px solid rgba(255,255,255,0.28);
+          border-radius: 14px;
+          padding: 10px 12px;
+          color: rgba(255,255,255,0.92);
+          font-size: 14px;
+          line-height: 1;
+          white-space: nowrap;
+          box-shadow: 0 10px 26px rgba(0,0,0,0.35);
+        }
+
+        .dbd-hint__key {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 52px;
+          height: 30px;
+          padding: 0 10px;
+          border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.28);
+          background: rgba(255,255,255,0.08);
+          font-weight: 700;
+          letter-spacing: 0.05em;
+        }
+
+        .dbd-end {
           position: fixed;
           inset: 0;
           z-index: 999;
-          background: rgba(0,0,0,0.92);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 22px;
-          padding: 24px 18px;
-          box-sizing: border-box;
+          display: grid;
+          place-items: center;
+          background: #000;
         }
 
-        .dbd-overlay__img {
-          max-width: 92vw;
-          max-height: 82vh;
-          width: auto;
-          height: auto;
+        .dbd-end__img {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
           object-fit: contain;
-          display: block;
           user-select: none;
           -webkit-user-drag: none;
           pointer-events: none;
-          filter: drop-shadow(0 22px 44px rgba(0,0,0,0.75));
         }
 
-        .dbd-overlay__btn {
-          margin-top: 10px;
-          appearance: none;
-          border: 2px solid rgba(255,255,255,0.16);
-          background: rgba(255,255,255,0.08);
-          color: rgba(255,255,255,0.92);
-          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans";
-          font-weight: 900;
-          font-size: 26px;
-          padding: 16px 28px;
-          border-radius: 18px;
+        .dbd-end__btn {
+          position: absolute;
+          left: 50%;
+          bottom: 26px;
+          transform: translateX(-50%);
+          pointer-events: auto;
+          border: 1px solid rgba(255,255,255,0.35);
+          background: rgba(0,0,0,0.62);
+          color: rgba(255,255,255,0.95);
+          padding: 12px 18px;
+          border-radius: 12px;
+          font-size: 16px;
           cursor: pointer;
-          box-shadow: 0 18px 42px rgba(0,0,0,0.55);
         }
-        .dbd-overlay__btn:active { transform: translateY(1px); }
+
+        .dbd-end__btn:active {
+          transform: translateX(-50%) scale(0.98);
+        }
       `}</style>
 
-      <div className="dbd-shell">
-        <div className="dbd-stage">
+      <div className="dbd-root">
+        <div className="dbd-side dbd-side--left" aria-hidden="true">
+          <div className="dbd-side__card">
+            <h2 className="dbd-side__brand">TEMU DEAD BY DAYLIGHT MASGU EDITION DEVELOPED BY MAHDOON</h2>
+            <p className="dbd-side__title">you became a pro player, show off your skills.</p>
+            <div className="dbd-legend">
+              <div className="dbd-legend__row">
+                <span className="dbd-legend__keys">
+                  <span className="dbd-keycap">W</span>
+                  <span className="dbd-keycap">A</span>
+                  <span className="dbd-keycap">S</span>
+                  <span className="dbd-keycap">D</span>
+                </span>
+                <span>Move</span>
+              </div>
+              <div className="dbd-legend__row">
+                <span className="dbd-legend__keys">
+                  <span className="dbd-keycap">SPACE</span>
+                </span>
+                <span>Interact</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="dbd-side dbd-side--right" aria-hidden="true">
+          <div className="dbd-side__card">
+            <div className="dbd-hud">
+              <div className="dbd-hud__row">
+                <div className="dbd-hud__gens">
+                  <div className="dbd-hud__num">{gensLeft}</div>
+                  <img className="dbd-hud__icon" src="/DBD/hud/gen.png" alt="" draggable={false} />
+                </div>
+              </div>
+
+              <div className="dbd-hud__row">
+  <div className="dbd-hud__health">
+    <div className="dbd-hook-tally">
+      <div className={`dbd-hook-tally__i ${isTallyOn(1) ? "dbd-hook-tally__i--on" : ""}`} />
+      <div className={`dbd-hook-tally__i ${isTallyOn(2) ? "dbd-hook-tally__i--on" : ""}`} />
+    </div>
+    <img className="dbd-hud__face" src={faceSrc} alt="" draggable={false} />
+  </div>
+</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="dbd-shell">
           <div
-            ref={viewportRef}
             className="dbd-viewport"
             style={
               {
@@ -2119,7 +2272,8 @@ export function DBD() {
 
             {GENS.map((g) => {
               const state = gens[g.id]
-              const src = state.done ? "/DBD/world/gen-on.png" : "/DBD/world/gen-off.png"
+              const workingThis = isWorkingOnGen && activeTarget?.kind === "gen" && activeTarget.id === g.id
+              const src = workingThis ? "/DBD/world/gen-off.png" : state.done ? "/DBD/world/gen-on.png" : "/DBD/world/gen-off.png"
               return (
                 <img
                   key={g.id}
@@ -2194,11 +2348,11 @@ export function DBD() {
                     "--x": `${hookedHookPos.x}%`,
                     "--y": `${hookedHookPos.y}%`,
                     "--w": "12%",
-                    "--scale": "0.65",
+                    "--scale": "0.78",
                   } as CSSProperties
                 }
               >
-                <img className="dbd-player__img" src="/DBD/player/hung.png" alt="Player (hooked)" draggable={false} />
+                <img className="dbd-player__img" src="/DBD/player/hung.png" alt="Player" draggable={false} />
               </div>
             )}
 
@@ -2214,7 +2368,7 @@ export function DBD() {
                   } as CSSProperties
                 }
               >
-                <img className="dbd-player__img" src="/DBD/player/injured.png" alt="Player (down)" draggable={false} />
+                <img className="dbd-player__img" src="/DBD/player/injured.png" alt="Player" draggable={false} />
               </div>
             )}
 
@@ -2231,38 +2385,6 @@ export function DBD() {
                 }
               >
                 <img className="dbd-player__img" src={playerSrcNormal} alt="Player" draggable={false} />
-              </div>
-            )}
-
-            {hintText && hudPos && !hiddenIn && !playerDownUI && !playerCarriedUI && !playerHookedUI && (
-              <div className="dbd-hint" style={{ "--x": `${hudPos.x}%`, "--y": `${hudPos.y}%` } as CSSProperties}>
-                <div className="dbd-hint__pill">{hintText}</div>
-              </div>
-            )}
-
-            {showLockerHint && (
-              <div
-                className="dbd-hint"
-                style={
-                  {
-                    "--x": `${(LOCKERS.find((l) => l.id === interactableLocker)?.x ?? 50)}%`,
-                    "--y": `${(LOCKERS.find((l) => l.id === interactableLocker)?.y ?? 50)}%`,
-                  } as CSSProperties
-                }
-              >
-                <div className="dbd-hint__pill">Press Space to hide</div>
-              </div>
-            )}
-
-            {showPalletHint && palletHintPos && (
-              <div className="dbd-hint" style={{ "--x": `${palletHintPos.x}%`, "--y": `${palletHintPos.y}%` } as CSSProperties}>
-                <div className="dbd-hint__pill">Press Space to drop</div>
-              </div>
-            )}
-
-            {hiddenIn && hiddenLockerPos && (
-              <div className="dbd-hint" style={{ "--x": `${hiddenLockerPos.x}%`, "--y": `${hiddenLockerPos.y}%` } as CSSProperties}>
-                <div className="dbd-hint__pill">Press Space to exit</div>
               </div>
             )}
 
@@ -2310,69 +2432,40 @@ export function DBD() {
                     />
                   </svg>
 
-                  <div className="skill-center">
-                    <div className="skill-pill">Space</div>
-                  </div>
+                  <div className="skill-key">SPACE</div>
                 </div>
               </div>
             )}
-          </div>
-        </div>
 
-        <div className="dbd-side" style={{ left: `${panelPos.leftX}px`, width: `${panelPos.w}px` }}>
-          <div className="dbd-bloody-title">KNOCKOFF DEAD BY DAYLIGHT MASGU EDITION DEVELOPED BY MAHDOON</div>
-
-          <div className="dbd-side__card">
-            <div className="dbd-side__title">You became a pro player, show off your skills.</div>
-
-            <div className="dbd-legend">
-              <div className="dbd-legend__row">
-                <span className="dbd-keycap">W</span>
-                <span>Move up</span>
-              </div>
-              <div className="dbd-legend__row">
-                <span className="dbd-keycap">A</span>
-                <span>Move left</span>
-              </div>
-              <div className="dbd-legend__row">
-                <span className="dbd-keycap">S</span>
-                <span>Move down</span>
-              </div>
-              <div className="dbd-legend__row">
-                <span className="dbd-keycap">D</span>
-                <span>Move right</span>
-              </div>
-              <div className="dbd-legend__row">
-                <span className="dbd-keycap">Space</span>
-                <span>Interact, hide, drop, skill check</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="dbd-side" style={{ left: `${panelPos.rightX}px`, width: `${panelPos.w}px` }}>
-          <div className="dbd-side__card" style={{ height: "100%" }}>
-            <div className="dbd-hud">
-              <div className="dbd-hud__row">
-                <div className="dbd-hud__num">{gensLeft}</div>
-                <img className="dbd-hud__icon" src="/DBD/hud/gen.png" alt="Gens left" draggable={false} />
-              </div>
-
-              <div className="dbd-hud__row">
-                <img className="dbd-hud__face" src={faceSrc} alt="Health" draggable={false} />
-                <div className="dbd-hook-tally" aria-label="Hook tally">
-                  <div className={`dbd-hook-tally__i ${hookCountUI >= 1 ? "is-filled" : ""}`} />
-                  <div className={`dbd-hook-tally__i ${hookCountUI >= 2 ? "is-filled" : ""}`} />
+            {worldHints.map((h, i) => (
+              <div
+                key={`${h.x}-${h.y}-${i}`}
+                className="dbd-hint-world"
+                style={{ "--x": `${h.x}%`, "--y": `${h.y}%` } as CSSProperties}
+                aria-hidden="true"
+              >
+                <div className="dbd-hint">
+                  <span className="dbd-hint__key">{h.key}</span>
+                  <span>{h.text}</span>
                 </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        {showOverlay && (
-          <div className="dbd-overlay" role="dialog" aria-modal="true">
-            <img className="dbd-overlay__img" src={overlayImg} alt={gameState === "win" ? "Win" : "Game over"} draggable={false} />
-            <button className="dbd-overlay__btn" onClick={resetGame}>
+        {gameOverUI && (
+          <div className="dbd-end" role="dialog" aria-label="Game Over">
+            <img className="dbd-end__img" src="/DBD/world/game-over.png" alt="Game Over" draggable={false} />
+            <button className="dbd-end__btn" type="button" onClick={resetGame}>
+              Retry
+            </button>
+          </div>
+        )}
+
+        {winUI && (
+          <div className="dbd-end" role="dialog" aria-label="You Win">
+            <img className="dbd-end__img" src="/DBD/world/win.png" alt="Win" draggable={false} />
+            <button className="dbd-end__btn" type="button" onClick={resetGame}>
               Retry
             </button>
           </div>
