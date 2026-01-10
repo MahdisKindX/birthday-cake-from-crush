@@ -727,7 +727,7 @@ export default function App() {
       ) : sceneMode === "italian" ? (
         <ItalianScene onNextScene={() => gotoScene("dbd")} />
       ) : sceneMode === "dbd" ? (
-        <DBD />
+  <DBD onNextScene={() => gotoScene("next")} />
       ) : sceneMode === "next" ? (
         <NextScene />
       ) : (

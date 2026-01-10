@@ -11,6 +11,8 @@ type SkillUI = {
   zoneWidth: number
 }
 
+type DBDProps = { onNextScene?: () => void }
+
 type Target = { kind: "gen"; id: string } | { kind: "gate" } | null
 type KillerStunKind = "none" | "hit" | "pallet"
 type SkillMode = "none" | "gen" | "hook"
@@ -38,24 +40,28 @@ type WorldHint = {
   y: number
 }
 
-export function DBD() {
+export function DBD({ onNextScene }: DBDProps) {
   const GENS = useMemo(
     () =>
       [
-        { id: "g1", x: 12, y: 58, w: "15%" },
+        { id: "g1", x: 8, y: 28, w: "15%" },
         { id: "g2", x: 11, y: 79, w: "15%" },
-        { id: "g3", x: 90, y: 45, w: "15%" },
+        { id: "g3", x: 85, y: 22, w: "15%" },
         { id: "g4", x: 84, y: 76, w: "15%" },
       ] as const,
     []
   )
 
+  const handleContinue = () => {
+    onNextScene?.()
+  }
+
   const PALLETS = useMemo(
     () =>
       [
-        { id: "p1", x: 19, y: 48, w: "20%", r: -12 },
+        { id: "p1", x: 30, y: 44, w: "20%", r: -12 },
         { id: "p2", x: 14.5, y: 65, w: "20%", r: -6 },
-        { id: "p3", x: 84, y: 32, w: "20%", r: 10 },
+        { id: "p3", x: 55, y: 28, w: "20%", r: 10 },
         { id: "p4", x: 78, y: 64, w: "20%", r: 6 },
       ] as const,
     []
@@ -64,11 +70,9 @@ export function DBD() {
   const LOCKERS = useMemo(
     () =>
       [
-        { id: "l1", x: 21.2, y: 16, w: "13.5%", lockXFix: "-12px" },
         { id: "l2", x: 4, y: 44, w: "13.5%", lockXFix: "-12px" },
-        { id: "l3", x: 65, y: 19.5, w: "13.5%", lockXFix: "-12px" },
-        { id: "l4", x: 91.4, y: 24.5, w: "13.5%", lockXFix: "-12px" },
-        { id: "l5", x: 91.5, y: 55, w: "13.5%", lockXFix: "-12px" },
+        { id: "l3", x: 29.2, y: 16.7, w: "13.5%", lockXFix: "-12px" },
+        { id: "l5", x: 94, y: 40, w: "13.5%", lockXFix: "-12px" },
         { id: "l6", x: 47.5, y: 92.0, w: "13.5%", lockXFix: "-12px" },
       ] as const,
     []
@@ -93,7 +97,7 @@ export function DBD() {
   )
 
   type GenId = (typeof GENS)[number]["id"]
-  type GenState = Record<GenId, { progress: number; done: boolean }>
+  type GenState = Record<GenId, { progress: number; done: boolean; kickReady: boolean; decayActive: boolean; decayFloor: number }>
 
   type PalletId = (typeof PALLETS)[number]["id"]
   type PalletState = Record<PalletId, { down: boolean }>
@@ -103,10 +107,10 @@ export function DBD() {
 
   const initialGens = useMemo<GenState>(
     () => ({
-      g1: { progress: 0, done: false },
-      g2: { progress: 0, done: false },
-      g3: { progress: 0, done: false },
-      g4: { progress: 0, done: false },
+      g1: { progress: 0, done: false, kickReady: false, decayActive: false, decayFloor: 0 },
+      g2: { progress: 0, done: false, kickReady: false, decayActive: false, decayFloor: 0 },
+      g3: { progress: 0, done: false, kickReady: false, decayActive: false, decayFloor: 0 },
+      g4: { progress: 0, done: false, kickReady: false, decayActive: false, decayFloor: 0 },
     }),
     []
   )
@@ -197,6 +201,11 @@ export function DBD() {
   const killerStunKindUIRef = useRef<KillerStunKind>("none")
 
   const killerIgnorePlayerUntilRef = useRef<number>(0)
+
+  // Random locker checks (commit to one locker at a time)
+  const killerNextLockerTryAtRef = useRef<number>(0)
+  const killerLockerTargetIdRef = useRef<LockerId | null>(null)
+  const killerLockerCheckUntilRef = useRef<number>(0)
 
   const playerBoostUntilRef = useRef<number>(0)
   const playerInvulnUntilRef = useRef<number>(0)
@@ -315,7 +324,7 @@ export function DBD() {
       a.pause()
       a.currentTime = 0
       void a.play()
-    } catch {}
+    } catch { }
   }
 
   const startChase = () => {
@@ -330,7 +339,7 @@ export function DBD() {
         void a.play()
       }
       chaseStartedRef.current = true
-    } catch {}
+    } catch { }
   }
 
   const stopChase = () => {
@@ -339,7 +348,7 @@ export function DBD() {
     try {
       a.pause()
       a.currentTime = 0
-    } catch {}
+    } catch { }
   }
 
   const startRun = () => {
@@ -349,7 +358,7 @@ export function DBD() {
       a.loop = true
       if (a.paused) a.currentTime = 0
       void a.play()
-    } catch {}
+    } catch { }
   }
 
   const stopRun = () => {
@@ -358,7 +367,7 @@ export function DBD() {
     try {
       a.pause()
       a.currentTime = 0
-    } catch {}
+    } catch { }
   }
 
   useEffect(() => {
@@ -434,13 +443,13 @@ export function DBD() {
     return () => {
       try {
         run.pause()
-      } catch {}
+      } catch { }
       try {
         chase.pause()
-      } catch {}
+      } catch { }
       try {
         end.pause()
-      } catch {}
+      } catch { }
     }
   }, [])
 
@@ -604,19 +613,19 @@ export function DBD() {
   }
 
   const scheduleNextSkill = (now: number, difficulty01: number) => {
-    const base = 6500
-    const swing = 3500
-    const faster = 1200 * difficulty01
-    const ms = Math.max(5200, base + Math.random() * swing - faster)
+    const base = 6000
+    const swing = 3000
+    const faster = 1500 * difficulty01
+    const ms = Math.max(4800, base + Math.random() * swing - faster)
     nextSkillAtRef.current = now + ms
   }
 
   const spawnSkill = (now: number, difficulty01: number, mode: SkillMode) => {
-    const zoneWidth = clamp(0.18 - difficulty01 * 0.08, 0.09, 0.18)
+    const zoneWidth = clamp(0.16 - difficulty01 * 0.09, 0.07, 0.16)
     const minStart = 0.18
     const maxStart = 0.92 - zoneWidth
     const zoneStart = clamp(minStart + Math.random() * Math.max(0, maxStart - minStart), minStart, maxStart)
-    const duration = clamp(2050 - difficulty01 * 320 + (Math.random() * 260 - 130), 1400, 2400)
+    const duration = clamp(1850 - difficulty01 * 380 + (Math.random() * 220 - 110), 1150, 2100)
 
     skillModeRef.current = mode
     skillRef.current = { active: true, startedAt: now, duration, zoneStart, zoneWidth, resolved: false }
@@ -628,10 +637,28 @@ export function DBD() {
     const g = gensRef.current[id]
     if (!g || g.done) return
 
-    const next = clamp(g.progress + delta, 0, 100)
+    const before = g.progress
+    const next = clamp(before + delta, 0, 100)
     const becameDone = !g.done && next >= 100
+    const progressed = next > before
 
-    gensRef.current[id] = { progress: next, done: becameDone ? true : g.done }
+    let decayActive = g.decayActive
+    let decayFloor = g.decayFloor
+
+    if (decayActive && next > decayFloor + 0.01) {
+      decayActive = false
+      decayFloor = 0
+    }
+
+    const kickReadyNext = becameDone ? false : g.kickReady || (progressed && next > 0)
+
+    gensRef.current[id] = {
+      progress: next,
+      done: becameDone ? true : g.done,
+      kickReady: kickReadyNext,
+      decayActive,
+      decayFloor,
+    }
     setGens({ ...gensRef.current })
 
     if (becameDone) {
@@ -652,7 +679,7 @@ export function DBD() {
 
     try {
       stopRun()
-    } catch {}
+    } catch { }
 
     stopChase()
     playOneShot(endMusicRef)
@@ -672,7 +699,7 @@ export function DBD() {
 
     try {
       stopRun()
-    } catch {}
+    } catch { }
 
     stopChase()
     playOneShot(endMusicRef)
@@ -680,6 +707,7 @@ export function DBD() {
     if (interactingRef.current) stopInteract()
     clearSkill()
   }
+
 
   const resolveGenSkill = (now: number, success: boolean) => {
     const t = activeTargetRef.current
@@ -702,10 +730,10 @@ export function DBD() {
 
     if (success) {
       playOneShot(skillSuccessRef)
-      applyGenDelta(id, 18)
+      applyGenDelta(id, 10)
     } else {
       playOneShot(genBlowRef)
-      applyGenDelta(id, -6)
+      applyGenDelta(id, -24)
     }
 
     const difficulty01 = clamp((gensRef.current[id]?.progress ?? 0) / 100, 0, 1)
@@ -816,8 +844,7 @@ export function DBD() {
 
   const tryToggleLocker = () => {
     if (interactingRef.current) return false
-    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current || gameOverRef.current || winRef.current)
-      return false
+    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current || gameOverRef.current || winRef.current) return false
 
     const currentlyHidden = hiddenInRef.current
     if (currentlyHidden) {
@@ -860,8 +887,7 @@ export function DBD() {
   const tryDropPallet = () => {
     if (interactingRef.current) return false
     if (hiddenInRef.current) return false
-    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current || gameOverRef.current || winRef.current)
-      return false
+    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current || gameOverRef.current || winRef.current) return false
 
     const pos = playerPosRef.current
     let best: { id: PalletId; d: number } | null = null
@@ -884,7 +910,7 @@ export function DBD() {
     if (palletLayout) {
       const kpos = killerPosRef.current
       const dK = pxDistTo(kpos, palletLayout)
-      const KILLER_PALLET_STUN_RANGE = 12.0
+      const KILLER_PALLET_STUN_RANGE = 13.0
       if (dK <= KILLER_PALLET_STUN_RANGE) {
         const now = performance.now()
         killerStunUntilRef.current = Math.max(killerStunUntilRef.current, now + 3000)
@@ -904,14 +930,7 @@ export function DBD() {
   const startInteractOn = (t: Target) => {
     if (!t) return
     if (hiddenInRef.current) return
-    if (
-      playerDownRef.current ||
-      playerCarriedRef.current ||
-      playerHookedRef.current ||
-      gameOverRef.current ||
-      winRef.current
-    )
-      return
+    if (playerDownRef.current || playerCarriedRef.current || playerHookedRef.current || gameOverRef.current || winRef.current) return
     if (interactingRef.current) stopInteract()
 
     if (t.kind === "gen") {
@@ -950,9 +969,98 @@ export function DBD() {
     }
   }
 
+  const KILLER_GEN_SABOTAGE_CHANCE = 0.14
+  const KILLER_SABOTAGE_TRY_MIN_MS = 4200
+  const KILLER_SABOTAGE_TRY_MAX_MS = 8200
+  const KILLER_KICK_ANIM_MS = 1500
+  const KILLER_KICK_IMPACT_MS = 320
+  const KILLER_SABOTAGE_AMOUNT = 14
+
+  const GEN_REGRESS_RATE = 0.95 // progress points per second after a kick, while not being repaired
+
+  const KILLER_LOCKER_CHECK_CHANCE = 0.10
+  const KILLER_LOCKER_CHECK_CHANCE_HIDDEN = 0.35
+  const KILLER_LOCKER_TRY_MIN_MS = 5200
+  const KILLER_LOCKER_TRY_MAX_MS = 10000
+  const KILLER_LOCKER_CHECK_MS = 700
+
+  const killerNextSabotageTryAtRef = useRef<number>(0)
+  const killerSabotageTargetRef = useRef<GenId | null>(null)
+
+  const killerGenKickRef = useRef<{ id: GenId; startAt: number; impactAt: number; endAt: number; impacted: boolean } | null>(
+    null
+  )
+  const [kickedGenUI, setKickedGenUI] = useState<GenId | null>(null)
+  const kickedGenUIRef = useRef<GenId | null>(null)
+  const [killerKickingUI, setKillerKickingUI] = useState(false)
+  const killerKickingUIRef = useRef(false)
+
+  useEffect(() => {
+    kickedGenUIRef.current = kickedGenUI
+  }, [kickedGenUI])
+
+  useEffect(() => {
+    killerKickingUIRef.current = killerKickingUI
+  }, [killerKickingUI])
+
+  const canKickGenNow = (id: GenId) => {
+    const g = gensRef.current[id]
+    return !!g && !g.done && g.progress > 0 && g.kickReady && !g.decayActive
+  }
+
+  const pickSabotageGen = (from: { x: number; y: number }): { id: GenId; d: number } | null => {
+    let best: { id: GenId; d: number } | null = null
+    for (const gg of GENS) {
+      const st = gensRef.current[gg.id]
+      if (!st || st.done) continue
+      if (st.decayActive) continue
+      if (!st.kickReady) continue
+      if (st.progress <= 0) continue
+      const d = pxDistTo(from, gg)
+      if (!best || d < best.d) best = { id: gg.id, d }
+    }
+    return best
+  }
+
+  const startGenKick = (now: number, id: GenId) => {
+    killerGenKickRef.current = {
+      id,
+      startAt: now,
+      impactAt: now + KILLER_KICK_IMPACT_MS,
+      endAt: now + KILLER_KICK_ANIM_MS,
+      impacted: false,
+    }
+    setKickedGenUI(id)
+    setKillerKickingUI(true)
+    killerSabotageTargetRef.current = null
+    killerChasingRef.current = false
+  }
+
+  const applySabotageKick = (id: GenId) => {
+    const g = gensRef.current[id]
+    if (!g || g.done) return
+    if (!canKickGenNow(id)) return
+
+    const preKick = g.progress
+    const after = clamp(preKick - KILLER_SABOTAGE_AMOUNT, 0, 100)
+
+    gensRef.current[id] = {
+      progress: after,
+      done: after >= 100,
+      kickReady: false,
+      decayActive: true,
+      decayFloor: preKick,
+    }
+    setGens({ ...gensRef.current })
+
+    playOneShot(genBlowRef)
+  }
+
   const resetGame = () => {
     gameOverRef.current = false
     setGameOverUI(false)
+
+    lastRef.current = null
 
     winRef.current = false
     setWinUI(false)
@@ -981,9 +1089,9 @@ export function DBD() {
     lastStepPulseRef.current = 0
     stepUntilRef.current = 0
 
-    setPlayerPos({ x: 6.5, y: 70.5 })
-    playerPosRef.current = { x: 6.5, y: 70.5 }
-    lastOutsidePosRef.current = { x: 6.5, y: 70.5 }
+    setPlayerPos({ x: 20, y: 78 })
+    playerPosRef.current = { x: 20, y: 78 }
+    lastOutsidePosRef.current = { x: 20, y: 78 }
 
     hiddenInRef.current = null
     setHiddenIn(null)
@@ -1026,8 +1134,8 @@ export function DBD() {
     hookEscapeDoneRef.current = 0
     hookFailCountRef.current = 0
 
-    killerPosRef.current = { x: 62, y: 44 }
-    setKillerPos({ x: 62, y: 44 })
+    killerPosRef.current = { x: 88, y: 22 }
+    setKillerPos({ x: 88, y: 22 })
 
     killerFacingRef.current = "left"
     setKillerFacing("left")
@@ -1048,13 +1156,23 @@ export function DBD() {
 
     killerIgnorePlayerUntilRef.current = 0
 
+    killerNextLockerTryAtRef.current = 0
+    killerLockerTargetIdRef.current = null
+    killerLockerCheckUntilRef.current = 0
+
+    killerNextSabotageTryAtRef.current = 0
+    killerSabotageTargetRef.current = null
+    killerGenKickRef.current = null
+    setKickedGenUI(null)
+    setKillerKickingUI(false)
+
     chaseStartedRef.current = false
     stopChase()
     startChase()
 
     try {
       stopRun()
-    } catch {}
+    } catch { }
   }
 
   useEffect(() => {
@@ -1148,11 +1266,11 @@ export function DBD() {
     const BASE_GEN_RATE = 2.75
     const BASE_GATE_RATE = 5.5
 
-    const PLAYER_BASE_SPEED = 12
+    const PLAYER_BASE_SPEED = 13
     const PLAYER_BOOST_MULT = 1.75
     const PLAYER_BOOST_MS = 2000
 
-    const KILLER_SPEED = 18
+    const KILLER_SPEED = 17
     const KILLER_CARRY_SPEED = 16
 
     const KILLER_START_CHASE_RANGE = 45.0
@@ -1248,8 +1366,14 @@ export function DBD() {
       hookNextSkillAtRef.current = now + 800
     }
 
+    const pickRandomLockerId = () => {
+      const idx = Math.floor(Math.random() * LOCKERS.length)
+      return (LOCKERS[idx]?.id ?? null) as LockerId | null
+    }
+
     const tick = (t: number) => {
       if (gameOverRef.current || winRef.current) {
+        lastRef.current = t
         rafRef.current = requestAnimationFrame(tick)
         return
       }
@@ -1257,6 +1381,36 @@ export function DBD() {
       const last = lastRef.current ?? t
       const dt = (t - last) / 1000
       lastRef.current = t
+
+      // Gen regression after kick (only while not being repaired)
+      {
+        const cur = activeTargetRef.current
+        const repairingId =
+          interactingRef.current && cur && cur.kind === "gen" ? (cur.id as GenId) : (null as GenId | null)
+
+        let changed = false
+        const nextState = { ...gensRef.current }
+
+          ; (Object.keys(nextState) as GenId[]).forEach((id) => {
+            const st = nextState[id]
+            if (!st) return
+            if (st.done) return
+            if (!st.decayActive) return
+            if (repairingId === id) return
+
+            const before = st.progress
+            const after = clamp(before - GEN_REGRESS_RATE * dt, 0, 100)
+            if (Math.abs(after - before) < 0.0001) return
+
+            nextState[id] = { ...st, progress: after }
+            changed = true
+          })
+
+        if (changed) {
+          gensRef.current = nextState
+          setGens(nextState)
+        }
+      }
 
       const killerStunned = t < killerStunUntilRef.current
       const stunKindNow: KillerStunKind = killerStunned ? killerStunKindRef.current : "none"
@@ -1266,17 +1420,41 @@ export function DBD() {
         !playerDownRef.current && !playerCarriedRef.current && !playerHookedRef.current && t < playerBoostUntilRef.current
       setPlayerHurtIfNeeded(boostActive)
 
+      // End locker check if it finished
+      if (killerLockerTargetIdRef.current && killerLockerCheckUntilRef.current > 0 && t >= killerLockerCheckUntilRef.current) {
+        killerLockerCheckUntilRef.current = 0
+        killerLockerTargetIdRef.current = null
+      }
+
+      // Handle gen kick animation state
+      {
+        const kick = killerGenKickRef.current
+        if (kick) {
+          if (t >= kick.impactAt && !kick.impacted) {
+            kick.impacted = true
+            killerGenKickRef.current = kick
+            applySabotageKick(kick.id)
+          }
+          if (t >= kick.endAt) {
+            killerGenKickRef.current = null
+            setKickedGenUI(null)
+            setKillerKickingUI(false)
+          }
+        }
+      }
+
       {
         const kpos = killerPosRef.current
         const playerHidden = !!hiddenInRef.current
         const playerDown = playerDownRef.current
         const playerCarried = playerCarriedRef.current
         const playerHooked = playerHookedRef.current
-
         const ignorePlayer = t < killerIgnorePlayerUntilRef.current
 
+        // Hits
         if (
           !killerStunned &&
+          !killerKickingUIRef.current &&
           !playerHidden &&
           !playerDown &&
           !playerCarried &&
@@ -1325,28 +1503,65 @@ export function DBD() {
           }
         }
 
-        if (playerHidden || playerHooked || playerCarried || playerDown || ignorePlayer) {
+        // Chase toggles
+        if (playerHidden || playerHooked || playerCarried || playerDown || ignorePlayer || killerKickingUIRef.current) {
           killerChasingRef.current = false
         } else if (!killerChasingRef.current) {
           const dToPlayer = pxDistTo(kpos, playerPosRef.current)
           if (dToPlayer <= KILLER_START_CHASE_RANGE) killerChasingRef.current = true
         }
 
-        if (killerStunned) {
+        // Killer AI movement
+        if (killerStunned || killerKickingUIRef.current) {
           if (killerStepRef.current) setKillerIsStep(false)
         } else {
           let tx = kpos.x
           let ty = kpos.y
           let speed = KILLER_SPEED
 
-          if (playerHooked || ignorePlayer) {
-            if (!killerWanderTargetRef.current || t >= killerNextWanderPickAtRef.current) {
-              killerWanderTargetRef.current = pickWanderTarget()
-              killerNextWanderPickAtRef.current = t + (2600 + Math.random() * 2600)
-            }
-            tx = killerWanderTargetRef.current.x
-            ty = killerWanderTargetRef.current.y
-          } else if (playerCarried) {
+          const maybePickGenSabotage = () => {
+            if (killerSabotageTargetRef.current) return
+            if (killerChasingRef.current) return
+            if (playerHidden || playerDown || playerCarried || playerHooked) return
+            if (ignorePlayer) return
+            if (killerLockerTargetIdRef.current) return
+
+            if (t < killerNextSabotageTryAtRef.current) return
+            killerNextSabotageTryAtRef.current =
+              t +
+              (KILLER_SABOTAGE_TRY_MIN_MS + Math.random() * (KILLER_SABOTAGE_TRY_MAX_MS - KILLER_SABOTAGE_TRY_MIN_MS))
+
+            if (Math.random() >= KILLER_GEN_SABOTAGE_CHANCE) return
+
+            const best = pickSabotageGen(kpos)
+            if (!best) return
+            killerSabotageTargetRef.current = best.id
+          }
+
+          const maybePickLockerCheck = () => {
+            if (killerLockerTargetIdRef.current) return
+            if (killerChasingRef.current) return
+            if (playerDown || playerCarried || playerHooked) return
+            if (ignorePlayer) return
+            if (killerSabotageTargetRef.current) return
+
+            if (t < killerNextLockerTryAtRef.current) return
+            killerNextLockerTryAtRef.current =
+              t + (KILLER_LOCKER_TRY_MIN_MS + Math.random() * (KILLER_LOCKER_TRY_MAX_MS - KILLER_LOCKER_TRY_MIN_MS))
+
+            const chance = playerHidden ? KILLER_LOCKER_CHECK_CHANCE_HIDDEN : KILLER_LOCKER_CHECK_CHANCE
+            if (Math.random() >= chance) return
+
+            const id = pickRandomLockerId()
+            if (!id) return
+            killerLockerTargetIdRef.current = id
+            killerLockerCheckUntilRef.current = 0
+          }
+
+          maybePickGenSabotage()
+          maybePickLockerCheck()
+
+          if (playerCarried) {
             const hookId = carryHookTargetRef.current
             const hook = hookId ? HOOKS.find((h) => h.id === hookId) : null
             if (hook) {
@@ -1393,6 +1608,70 @@ export function DBD() {
                 setPlayerCarriedIfNeeded(true)
               }
             }
+          } else if (killerLockerTargetIdRef.current) {
+            const lid = killerLockerTargetIdRef.current
+            const locker = lid ? LOCKERS.find((l) => l.id === lid) : null
+            if (!locker) {
+              killerLockerTargetIdRef.current = null
+              killerLockerCheckUntilRef.current = 0
+            } else if (t < killerLockerCheckUntilRef.current && killerLockerCheckUntilRef.current > 0) {
+              if (killerStepRef.current) setKillerIsStep(false)
+            } else {
+              tx = locker.x
+              ty = locker.y
+              speed = KILLER_SPEED
+
+              const dLocker = pxDistTo(kpos, locker)
+              const CHECK_RANGE = 2.4
+              if (dLocker <= CHECK_RANGE) {
+                killerLockerCheckUntilRef.current = t + KILLER_LOCKER_CHECK_MS
+                playOneShot(lockerOpenRef)
+
+                const hid = hiddenInRef.current
+                if (hid && hid === locker.id) {
+                  hiddenInRef.current = null
+                  setHiddenIn(null)
+
+                  playerHitsRef.current = 2
+                  setPlayerHitsUI(2)
+
+                  setPlayerDownIfNeeded(false)
+                  setPlayerHookedIfNeeded(false)
+                  setHookedHookIdIfNeeded(null)
+                  setPlayerCarriedIfNeeded(true)
+
+                  carryHookTargetRef.current = findNearestHookId(kpos)
+                  killerChasingRef.current = false
+
+                  killerLockerTargetIdRef.current = null
+                }
+              }
+            }
+          } else if (!killerChasingRef.current && killerSabotageTargetRef.current) {
+            const gid = killerSabotageTargetRef.current
+            const gLayout = gid ? GENS.find((gg) => gg.id === gid) ?? null : null
+            const gState = gid ? gensRef.current[gid] : null
+
+            if (!gid || !gLayout || !gState || gState.done || !canKickGenNow(gid)) {
+              killerSabotageTargetRef.current = null
+            } else {
+              tx = gLayout.x
+              ty = gLayout.y
+              speed = KILLER_SPEED
+
+              const KICK_RANGE = 2.4
+              const dGen = pxDistTo(kpos, gLayout)
+              if (dGen <= KICK_RANGE) {
+                startGenKick(t, gid)
+              }
+            }
+          } else if (playerHooked || ignorePlayer || playerHidden) {
+            if (!killerWanderTargetRef.current || t >= killerNextWanderPickAtRef.current) {
+              killerWanderTargetRef.current = pickWanderTarget()
+              killerNextWanderPickAtRef.current = t + (2600 + Math.random() * 2600)
+            }
+            tx = killerWanderTargetRef.current.x
+            ty = killerWanderTargetRef.current.y
           } else if (killerChasingRef.current && !playerHidden) {
             const ppos = playerPosRef.current
             const dToPlayer = pxDistTo(kpos, ppos)
@@ -1441,13 +1720,8 @@ export function DBD() {
         }
       }
 
-      if (
-        gateRef.current.opened &&
-        !hiddenInRef.current &&
-        !playerDownRef.current &&
-        !playerCarriedRef.current &&
-        !playerHookedRef.current
-      ) {
+      // Win check
+      if (gateRef.current.opened && !hiddenInRef.current && !playerDownRef.current && !playerCarriedRef.current && !playerHookedRef.current) {
         const p = playerPosRef.current
         const dx = Math.abs((p.x - GATE.x) * ASPECT)
         if (p.y <= WIN_Y_THRESHOLD && dx <= WIN_X_RANGE) {
@@ -1457,6 +1731,7 @@ export function DBD() {
         }
       }
 
+      // Hook skill loop
       if (playerHookedRef.current) {
         clearAllGenStuff()
         stopRun()
@@ -1464,7 +1739,7 @@ export function DBD() {
         if (stepRef.current) setIsStep(false)
 
         if (!skillRef.current.active && t >= hookNextSkillAtRef.current) {
-          spawnSkill(t, 0.55, "hook")
+          spawnSkill(t, 0.6, "hook")
         }
 
         if (skillRef.current.active && skillModeRef.current === "hook") {
@@ -1484,6 +1759,7 @@ export function DBD() {
           }
         }
       } else if (!hiddenInRef.current && !playerDownRef.current && !playerCarriedRef.current) {
+        // Player move
         const speed = PLAYER_BASE_SPEED * (boostActive ? PLAYER_BOOST_MULT : 1)
 
         const k = keysRef.current
@@ -1518,6 +1794,7 @@ export function DBD() {
           if (stepRef.current) setIsStep(false)
         }
 
+        // Interaction tick
         const cur = activeTargetRef.current
         if (interactingRef.current && cur) {
           if (cur.kind === "gen") {
@@ -1536,8 +1813,19 @@ export function DBD() {
                 const after = clamp(before + BASE_GEN_RATE * dt, 0, 100)
                 if (after !== before) {
                   const done = after >= 100
-                  gensRef.current[id] = { progress: after, done }
+                  const progressed = after > before
+
+                  let decayActive = gs.decayActive
+                  let decayFloor = gs.decayFloor
+                  if (decayActive && after > decayFloor + 0.01) {
+                    decayActive = false
+                    decayFloor = 0
+                  }
+
+                  const kickReady = done ? false : gs.kickReady || (progressed && after > 0)
+                  gensRef.current[id] = { progress: after, done, kickReady, decayActive, decayFloor }
                   setGens({ ...gensRef.current })
+
                   if (done) {
                     stopRun()
                     playOneShot(genDoneRef)
@@ -1620,7 +1908,7 @@ export function DBD() {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
-  }, [GENS, skillUI.active, allGensDone, GATE, HOOKS, PALLETS, initialGens, initialPallets])
+  }, [GENS, skillUI.active, allGensDone, GATE, HOOKS, PALLETS, LOCKERS, initialGens, initialPallets])
 
   const playerSrcNormal = (() => {
     if (facing === "front") return isStep ? "/DBD/player/front-step.png" : "/DBD/player/front.png"
@@ -1649,6 +1937,24 @@ export function DBD() {
     if (activeTarget.kind === "gen") return gens[activeTarget.id as GenId]?.progress ?? 0
     return gate.progress
   }, [isInteracting, activeTarget, gens, gate.progress])
+
+  const activeGenDecay = useMemo(() => {
+    if (!isInteracting || !activeTarget || activeTarget.kind !== "gen") return null
+    const st = gens[activeTarget.id as GenId]
+    if (!st) return null
+    if (!st.decayActive) return null
+    return st.decayFloor
+  }, [isInteracting, activeTarget, gens])
+
+  const kickedGenPos = useMemo(() => {
+    if (!kickedGenUI) return null
+    return GENS.find((g) => g.id === kickedGenUI) ?? null
+  }, [kickedGenUI, GENS])
+
+  const killerKickFacing = useMemo<Facing>(() => {
+    if (!kickedGenPos) return killerFacing
+    return killerPos.x < kickedGenPos.x ? "right" : "left"
+  }, [kickedGenPos, killerPos.x, killerFacing])
 
   const isWorkingOnGen = isInteracting && !!activeTarget && activeTarget.kind === "gen"
 
@@ -1679,8 +1985,7 @@ export function DBD() {
     !playerCarriedUI &&
     !playerHookedUI &&
     !playerDownUI &&
-    !(isInteracting && activeTarget?.kind === "gen")
-
+    !isWorkingOnGen
   const showPlayerDown = !hiddenIn && playerDownUI && !playerCarriedUI && !playerHookedUI && !!downPos
 
   const worldHints: WorldHint[] = useMemo(() => {
@@ -1737,9 +2042,7 @@ export function DBD() {
   ])
 
   const faceSrc =
-    playerHitsUI === 0 && !playerDownUI && !playerCarriedUI && !playerHookedUI
-      ? "/DBD/hud/normal.png"
-      : "/DBD/hud/injured.png"
+    playerHitsUI === 0 && !playerDownUI && !playerCarriedUI && !playerHookedUI ? "/DBD/hud/normal.png" : "/DBD/hud/injured.png"
 
   const isTallyOn = (idx: 1 | 2) => hookCountUI >= idx
 
@@ -1770,6 +2073,10 @@ export function DBD() {
           height: min(100vh, calc(100vw * 0.66655));
         }
 
+        .dbd-killer--kick {
+  z-index: 4;
+}
+
         .dbd-map {
           position: absolute;
           inset: 0;
@@ -1785,13 +2092,12 @@ export function DBD() {
           position: fixed;
           top: 0;
           bottom: 0;
-width: clamp(
-  0px,
-  calc((100vw - min(100vw, calc(100vh * 1.50037))) / 2),
-  700px
-);
-           padding: 10px 10px;
-
+          width: clamp(
+            0px,
+            calc((100vw - min(100vw, calc(100vh * 1.50037))) / 2),
+            700px
+          );
+          padding: 10px 10px;
           overflow: hidden;
           color: rgba(255,255,255,0.92);
           pointer-events: none;
@@ -1809,7 +2115,7 @@ width: clamp(
           border: 1px solid rgba(255,255,255,0.22);
           border-radius: 18px;
           padding: 10px 10px;
-  box-sizing: border-box;
+          box-sizing: border-box;
           box-shadow: 0 14px 36px rgba(0,0,0,0.4);
           overflow: hidden;
         }
@@ -1885,73 +2191,57 @@ width: clamp(
           gap: clamp(10px, 5cqw, 16px);
         }
 
-        .dbd-hud__gens {
-          display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  width: 100%;
-        }
-
         .dbd-hud__gens,
-.dbd-hud__health {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 16px;
-  width: 100%;
-}
-
-        .dbd-hud__num {
-          font-size: 120px;          /* smaller */
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  color: rgba(255,255,255,0.98);
-  min-width: 0;
-  text-align: left;
-  transform: translateX(22px); /* less to the right */
-  pointer-events: none;
-        }
-
-.dbd-hud__icon {
-  width: 400px;
-  height: 400px;
-  object-fit: contain;
-  flex: 0 0 auto;
-  transform: translateX(-90px); /* more left */
-  user-select: none;
-  -webkit-user-drag: none;
-  pointer-events: none;
-  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
-}
-
         .dbd-hud__health {
           display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  width: 100%;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 16px;
+          width: 100%;
         }
 
-.dbd-hud__face {
-  width: 400px;
-  height: 400px;
-  object-fit: contain;
-  flex: 0 0 auto;
-  transform: translateX(-30px); /* more left */
-  user-select: none;
-  -webkit-user-drag: none;
-  pointer-events: none;
-  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
-}
+        .dbd-hud__num {
+          font-size: 120px;
+          font-weight: 900;
+          line-height: 1;
+          letter-spacing: 0.02em;
+          color: rgba(255,255,255,0.98);
+          min-width: 0;
+          text-align: left;
+          transform: translateX(22px);
+          pointer-events: none;
+        }
+
+        .dbd-hud__icon {
+          width: 400px;
+          height: 400px;
+          object-fit: contain;
+          flex: 0 0 auto;
+          transform: translateX(-90px);
+          user-select: none;
+          -webkit-user-drag: none;
+          pointer-events: none;
+          filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
+        }
+
+        .dbd-hud__face {
+          width: 400px;
+          height: 400px;
+          object-fit: contain;
+          flex: 0 0 auto;
+          transform: translateX(-30px);
+          user-select: none;
+          -webkit-user-drag: none;
+          pointer-events: none;
+          filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
+        }
 
         .dbd-hook-tally {
           display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 0 0 auto;
-  transform: translateX(69px);
+          align-items: center;
+          gap: 10px;
+          flex: 0 0 auto;
+          transform: translateX(69px);
         }
 
         .dbd-hook-tally__i {
@@ -2004,7 +2294,53 @@ width: clamp(
           z-index: 2;
         }
 
-        .dbd-gen { width: clamp(140px, var(--w, 15%), 320px); }
+        .dbd-gen-wrap {
+  position: absolute;
+  left: var(--x, 50%);
+  top: var(--y, 50%);
+  transform: translate(-50%, -50%);
+  width: clamp(140px, var(--w, 15%), 320px);
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* softer glow area + less blur */
+.dbd-gen-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  border-radius: 999px;
+  opacity: 0;
+  filter: blur(6px);
+  transition: opacity 160ms ease;
+  background: radial-gradient(circle, rgba(255, 0, 0, 0.28), rgba(255, 0, 0, 0) 72%);
+}
+
+/* lighter highlight on regress */
+.dbd-gen-wrap--regress::before {
+  opacity: 1;
+}
+
+/* reduce drop-shadows a lot */
+.dbd-gen-wrap--regress {
+  filter:
+    drop-shadow(0 0 6px rgba(255, 0, 0, 0.35))
+    drop-shadow(0 0 14px rgba(255, 0, 0, 0.18));
+}
+
+
+.dbd-gen-img {
+  position: relative;
+  width: 100%;
+  height: auto;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
 
         .dbd-locker {
           transform: translate(calc(-50% + var(--lock-x-fix, -12px)), -50%);
@@ -2072,12 +2408,24 @@ width: clamp(
         }
 
         .dbd-progress__track {
+          position: relative;
           height: 10px;
           border-radius: 999px;
           background: rgba(255,255,255,0.14);
           border: 1px solid rgba(255,255,255,0.14);
           overflow: hidden;
           box-shadow: 0 10px 26px rgba(0,0,0,0.35);
+        }
+
+        .dbd-progress__baseline {
+          position: absolute;
+          top: -6px;
+          bottom: -6px;
+          width: 3px;
+          left: 0%;
+          background: rgba(255, 0, 0, 0.9);
+          box-shadow: 0 0 12px rgba(255, 0, 0, 0.55);
+          border-radius: 999px;
         }
 
         .dbd-progress__fill {
@@ -2182,8 +2530,24 @@ width: clamp(
           pointer-events: none;
         }
 
+
+
+/* push actions to bottom + add space from bottom edge */
+.dbd-end__actions{
+  margin-top:auto;
+  padding-bottom:24px;
+
+  display:flex;
+  gap:18px;              /* gap between buttons */
+  justify-content:center;
+  align-items:center;
+  width:100%;
+}
+
         .dbd-end__btn {
-          position: absolute;
+          display:inline-flex;
+  align-items:center;
+  justify-content:center;
           left: 50%;
           bottom: 26px;
           transform: translateX(-50%);
@@ -2205,7 +2569,7 @@ width: clamp(
       <div className="dbd-root">
         <div className="dbd-side dbd-side--left" aria-hidden="true">
           <div className="dbd-side__card">
-            <h2 className="dbd-side__brand">TEMU DEAD BY DAYLIGHT MASGU EDITION DEVELOPED BY MAHDOON</h2>
+            <h2 className="dbd-side__brand">KNOCKOFF DEAD BY DAYLIGHT MASGU EDITION DEVELOPED BY MAHDOON</h2>
             <p className="dbd-side__title">you became a pro player, show off your skills.</p>
             <div className="dbd-legend">
               <div className="dbd-legend__row">
@@ -2238,14 +2602,14 @@ width: clamp(
               </div>
 
               <div className="dbd-hud__row">
-  <div className="dbd-hud__health">
-    <div className="dbd-hook-tally">
-      <div className={`dbd-hook-tally__i ${isTallyOn(1) ? "dbd-hook-tally__i--on" : ""}`} />
-      <div className={`dbd-hook-tally__i ${isTallyOn(2) ? "dbd-hook-tally__i--on" : ""}`} />
-    </div>
-    <img className="dbd-hud__face" src={faceSrc} alt="" draggable={false} />
-  </div>
-</div>
+                <div className="dbd-hud__health">
+                  <div className="dbd-hook-tally">
+                    <div className={`dbd-hook-tally__i ${isTallyOn(1) ? "dbd-hook-tally__i--on" : ""}`} />
+                    <div className={`dbd-hook-tally__i ${isTallyOn(2) ? "dbd-hook-tally__i--on" : ""}`} />
+                  </div>
+                  <img className="dbd-hud__face" src={faceSrc} alt="" draggable={false} />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2273,18 +2637,26 @@ width: clamp(
             {GENS.map((g) => {
               const state = gens[g.id]
               const workingThis = isWorkingOnGen && activeTarget?.kind === "gen" && activeTarget.id === g.id
-              const src = workingThis ? "/DBD/world/gen-off.png" : state.done ? "/DBD/world/gen-on.png" : "/DBD/world/gen-off.png"
+
+              const isRegressing = !!state?.decayActive && !state?.done && !workingThis
+
+              const src = workingThis
+                ? "/DBD/player/gen-working.png"
+                : state.done
+                  ? "/DBD/world/gen-on.png"
+                  : "/DBD/world/gen-off.png"
+
               return (
-                <img
+                <div
                   key={g.id}
-                  className="dbd-gen"
-                  src={src}
-                  alt="Generator"
-                  draggable={false}
+                  className={`dbd-gen-wrap ${isRegressing ? "dbd-gen-wrap--regress" : ""}`}
                   style={{ "--x": `${g.x}%`, "--y": `${g.y}%`, "--w": g.w } as CSSProperties}
-                />
+                >
+                  <img className="dbd-gen-img" src={src} alt="Generator" draggable={false} />
+                </div>
               )
             })}
+
 
             {PALLETS.map((p) => {
               const st = pallets[p.id]
@@ -2326,19 +2698,35 @@ width: clamp(
               />
             ))}
 
-            <div
-              className={`dbd-killer ${killerFacing === "right" ? "dbd-killer--flip" : ""}`}
-              style={
-                {
-                  "--x": `${killerPos.x}%`,
-                  "--y": `${killerPos.y}%`,
-                  "--w": "12%",
-                  "--killer-scale": String(killerRenderScale),
-                } as CSSProperties
-              }
-            >
-              <img className="dbd-killer__img" src={killerSrc} alt="Killer" draggable={false} />
-            </div>
+            {killerKickingUI ? (
+              <div
+                className={`dbd-killer dbd-killer--kick ${killerKickFacing === "right" ? "dbd-killer--flip" : ""}`}
+                style={
+                  {
+                    "--x": `${(kickedGenPos?.x ?? killerPos.x)}%`,
+                    "--y": `${(kickedGenPos?.y ?? killerPos.y)}%`,
+                    "--w": "12%",
+                    "--killer-scale": "1.25",
+                  } as CSSProperties
+                }
+              >
+                <img className="dbd-killer__img" src="/DBD/killer/gen-kick.png" alt="Killer" draggable={false} />
+              </div>
+            ) : (
+              <div
+                className={`dbd-killer ${killerFacing === "right" ? "dbd-killer--flip" : ""}`}
+                style={
+                  {
+                    "--x": `${killerPos.x}%`,
+                    "--y": `${killerPos.y}%`,
+                    "--w": "12%",
+                    "--killer-scale": String(killerRenderScale),
+                  } as CSSProperties
+                }
+              >
+                <img className="dbd-killer__img" src={killerSrc} alt="Killer" draggable={false} />
+              </div>
+            )}
 
             {hookedHookPos && playerHookedUI && (
               <div
@@ -2391,6 +2779,9 @@ width: clamp(
             {isInteracting && !hiddenIn && !playerDownUI && !playerCarriedUI && !playerHookedUI && (
               <div className="dbd-progress">
                 <div className="dbd-progress__track">
+                  {activeGenDecay !== null && (
+                    <div className="dbd-progress__baseline" style={{ left: `${clamp(activeGenDecay, 0, 100)}%` }} />
+                  )}
                   <div className="dbd-progress__fill" style={{ width: `${clamp(activeProgress, 0, 100)}%` }} />
                 </div>
               </div>
@@ -2465,11 +2856,19 @@ width: clamp(
         {winUI && (
           <div className="dbd-end" role="dialog" aria-label="You Win">
             <img className="dbd-end__img" src="/DBD/world/win.png" alt="Win" draggable={false} />
-            <button className="dbd-end__btn" type="button" onClick={resetGame}>
-              Retry
-            </button>
+
+            <div className="dbd-end__actions">
+              <button className="dbd-end__btn" type="button" onClick={resetGame}>
+                Retry
+              </button>
+
+              <button className="dbd-end__btn dbd-end__btn--primary" type="button" onClick={handleContinue}>
+                Continue
+              </button>
+            </div>
           </div>
         )}
+
       </div>
     </>
   )
