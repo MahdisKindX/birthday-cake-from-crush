@@ -46,6 +46,8 @@ const mouseVelMax = 18
 
 const MODAL_FADE_MS = 220
 
+const SCORE_SCREEN_BG = "/italy/pexels-chaitaastic-1797121.jpg"
+
 function rectFromEl(root: HTMLElement, el: HTMLElement) {
     const rr = root.getBoundingClientRect()
     const r = el.getBoundingClientRect()
@@ -121,6 +123,43 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
                 answer: "A presto",
                 note: "A presto means see you soon",
             },
+
+            // NEW (6–10)
+            {
+                prompt: "Pick the meaning",
+                subtitle: "Per favore",
+                choices: ["Goodbye", "Please", "Excuse me", "Thank you"],
+                answer: "Please",
+                note: "Per favore means please",
+            },
+            {
+                prompt: "Translate",
+                subtitle: "Good night",
+                choices: ["Buonanotte", "Buongiorno", "Buonasera", "Ciao"],
+                answer: "Buonanotte",
+                note: "Buonanotte is used when going to sleep",
+            },
+            {
+                prompt: "Pick the phrase",
+                subtitle: "Excuse me",
+                choices: ["Scusa", "Prego", "Salute", "A presto"],
+                answer: "Scusa",
+                note: "Scusa is a casual way to say excuse me / sorry",
+            },
+            {
+                prompt: "Translate",
+                subtitle: "Where is the bathroom?",
+                choices: ["Dov'è il bagno?", "Quanto costa?", "Che ore sono?", "Dove vivi?"],
+                answer: "Dov'è il bagno?",
+                note: "Dov'è il bagno? means where is the bathroom",
+            },
+            {
+                prompt: "Pick the meaning",
+                subtitle: "Arrivederci",
+                choices: ["See you later", "Goodbye", "Welcome", "Good luck"],
+                answer: "Goodbye",
+                note: "Arrivederci is a common way to say goodbye",
+            },
         ],
         []
     )
@@ -132,6 +171,12 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
             "/italy/pexels-meperdinaviagem-2064827.jpg",
             "/italy/pexels-fotios-photos-1279330.jpg",
             "/italy/image.jpg",
+
+            "/italy/pexels-pixabay-208701.jpg",
+            "/italy/pexels-lorenzo-pacifico-203320-629142.jpg",
+            "/italy/pexels-julius-silver-240301-753639.jpg",
+            "/italy/pexels-josh-hild-1270765-2422461.jpg",
+            "/italy/pexels-fabio-mariano-2406887-4046386.jpg",
         ],
         []
     )
@@ -143,6 +188,12 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
             "/italy/correct/kuromi-correct.gif",
             "/italy/correct/hk-correct.gif",
             "/italy/correct/dt-correct.gif",
+
+            "/italy/correct/baby-correct.gif",
+            "/italy/correct/cat1-correct.gif",
+            "/italy/correct/cat3-correct.gif",
+            "/italy/correct/dbd1-correct.gif",
+            "/italy/correct/dbd2-correct.gif",
         ],
         []
     )
@@ -154,6 +205,22 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
             "/italy/wrong/kuromi-wrong.gif",
             "/italy/wrong/hk-wrong.gif",
             "/italy/wrong/dt-wrong.gif",
+
+            "/italy/wrong/bingus-wrong.gif",
+            "/italy/wrong/cat1-wrong.gif",
+            "/italy/wrong/cat2-wrong.gif",
+            "/italy/wrong/dbd1-wrong.gif",
+            "/italy/wrong/dbd2-wrong.gif",
+        ],
+        []
+    )
+
+    const stickerDefs = useMemo(
+        () => [
+            { src: "/italy/stickers/huh2-sticker.gif", alt: "sticker 1" },
+            { src: "/italy/stickers/huh1-sticker.gif", alt: "sticker 2" },
+            { src: "/italy/stickers/cat-sticker.gif", alt: "sticker 3" },
+            { src: "/italy/stickers/bingus-sticker.gif", alt: "sticker 4" },
         ],
         []
     )
@@ -269,18 +336,22 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
     }
 
     const finalScoreGif = useMemo(() => {
-        if (score === 5) return "/italy/correct/perfect-score.gif"
-        if (score >= 3) return "/italy/correct/good-score.gif"
-        if (score >= 1) return "/italy/wrong/bad-score.gif"
+        const total = questions.length || 1
+        const pct = score / total
+        if (score === total) return "/italy/correct/perfect-score.gif"
+        if (pct >= 0.7) return "/italy/correct/good-score.gif"
+        if (pct >= 0.3) return "/italy/wrong/bad-score.gif"
         return "/italy/wrong/zero-score.gif"
-    }, [score])
+    }, [score, questions.length])
 
     const finalLabel = useMemo(() => {
-        if (score === 5) return "Perfecto 🏆"
-        if (score >= 3) return "Fantastico 🙂"
-        if (score >= 1) return "Eh 🙄"
+        const total = questions.length || 1
+        const pct = score / total
+        if (score === total) return "Perfecto 🏆"
+        if (pct >= 0.7) return "Fantastico 🙂"
+        if (pct >= 0.3) return "Eh 🙄"
         return "Try again loser 🫥"
-    }, [score])
+    }, [score, questions.length])
 
     useEffect(() => {
         setMounted(false)
@@ -289,6 +360,7 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
     }, [])
 
     useEffect(() => {
+        if (done) return
         const nextBg = backgrounds[idx % Math.max(backgrounds.length, 1)] ?? ""
         if (!bgFlip) {
             setBgB(nextBg)
@@ -297,7 +369,14 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
         }
         setBgA(nextBg)
         setBgFlip(false)
-    }, [idx, backgrounds, bgFlip])
+    }, [idx, backgrounds, bgFlip, done])
+
+    useEffect(() => {
+        if (!done) return
+        setBgA(SCORE_SCREEN_BG)
+        setBgB(SCORE_SCREEN_BG)
+        setBgFlip(false)
+    }, [done])
 
     useEffect(() => {
         const root = rootRef.current
@@ -532,7 +611,7 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
             try {
                 const bodies = Composite.allBodies(world)
                 if (bodies.length) World.remove(world, bodies)
-            } catch { }
+            } catch {}
 
             engineRef.current = null
             tokenBodiesRef.current = {}
@@ -711,26 +790,50 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
         padding: "16px 16px 18px",
     }
 
-    const topStyle: React.CSSProperties = {
-        width: "min(1200px, 96vw)",
-        justifySelf: "center",
-        display: "grid",
-        gridTemplateColumns: "1fr",
-        alignItems: "center",
-        gap: 12,
-    }
+const topStyle: React.CSSProperties = {
+    width: "min(1200px, 96vw)",
+    justifySelf: "center",
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    alignItems: "center",
+    gap: 12,
+}
 
-    const brandStyle: React.CSSProperties = {
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        letterSpacing: "0.10em",
-        textTransform: "uppercase",
-        fontWeight: 980,
-        fontSize: "clamp(22px, 2.9vw, 40px)",
-        color: "rgba(255,255,255,0.98)",
-        textShadow: "0 18px 46px rgba(0,0,0,0.40)",
-    }
+const brandStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    letterSpacing: "0.10em",
+    textTransform: "uppercase",
+    fontWeight: 980,
+    fontSize: "clamp(22px, 2.9vw, 40px)",
+    color: "rgba(255,255,255,0.98)",
+    textShadow: "0 18px 46px rgba(0,0,0,0.40)",
+    minWidth: 0,
+}
+
+const titleTextStyle: React.CSSProperties = {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+}
+
+const stickerRowStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginLeft: 8,
+    pointerEvents: "none",
+    filter: "drop-shadow(0 18px 34px rgba(0,0,0,0.35))",
+}
+
+const stickerStyle: React.CSSProperties = {
+    width: 74,
+    height: 74,
+    objectFit: "contain",
+    borderRadius: 16,
+    opacity: 0.98,
+}
 
     const badgeStyle: React.CSSProperties = {
         width: 52,
@@ -742,6 +845,7 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
         border: "1px solid rgba(255,255,255,0.22)",
         boxShadow: "0 18px 60px rgba(0,0,0,0.25)",
         fontSize: 22,
+        flexShrink: 0,
     }
 
     const centerStyle: React.CSSProperties = {
@@ -978,13 +1082,20 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
 
             <div style={wrapStyle}>
                 <div ref={topRef} style={{ ...topStyle, ...uiLayerStyle }}>
-                    <div style={brandStyle}>
-                        <div style={badgeStyle} aria-hidden="true">
-                            🦉
-                        </div>
-                        <div>italian duolingo quiz</div>
-                    </div>
-                </div>
+    <div style={brandStyle}>
+        <div style={badgeStyle} aria-hidden="true">
+            🦉
+        </div>
+
+        <div style={titleTextStyle}>italian duolingo quiz</div>
+
+        <div style={stickerRowStyle} aria-hidden="true">
+            {stickerDefs.map((s) => (
+                <img key={s.src} src={s.src} alt={s.alt} style={stickerStyle} />
+            ))}
+        </div>
+    </div>
+</div>
 
                 <div style={{ ...centerStyle, ...uiLayerStyle }}>
                     <div style={{ ...cardWrapStyle, ...shakeStyle }}>
@@ -1019,9 +1130,7 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
                                         }}
                                     />
 
-                                    <div style={{ fontWeight: 980, fontSize: "clamp(24px, 2.6vw, 40px)", marginTop: 2 }}>
-                                        {finalLabel}
-                                    </div>
+                                    <div style={{ fontWeight: 980, fontSize: "clamp(24px, 2.6vw, 40px)", marginTop: 2 }}>{finalLabel}</div>
 
                                     <div
                                         style={{
@@ -1137,7 +1246,7 @@ export function ItalianScene({ onNextScene }: ItalianSceneProps) {
                                                     check
                                                 </button>
                                             ) : (
-                                                <button style={btnDisabled} onClick={() => { }} aria-disabled="true">
+                                                <button style={btnDisabled} onClick={() => {}} aria-disabled="true">
                                                     check
                                                 </button>
                                             )}

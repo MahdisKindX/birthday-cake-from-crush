@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { CSSProperties, MutableRefObject } from "react"
 
 type Key = "w" | "a" | "s" | "d"
@@ -97,7 +97,10 @@ export function DBD({ onNextScene }: DBDProps) {
   )
 
   type GenId = (typeof GENS)[number]["id"]
-  type GenState = Record<GenId, { progress: number; done: boolean; kickReady: boolean; decayActive: boolean; decayFloor: number }>
+  type GenState = Record<
+    GenId,
+    { progress: number; done: boolean; kickReady: boolean; decayActive: boolean; decayFloor: number }
+  >
 
   type PalletId = (typeof PALLETS)[number]["id"]
   type PalletState = Record<PalletId, { down: boolean }>
@@ -202,7 +205,6 @@ export function DBD({ onNextScene }: DBDProps) {
 
   const killerIgnorePlayerUntilRef = useRef<number>(0)
 
-  // Random locker checks (commit to one locker at a time)
   const killerNextLockerTryAtRef = useRef<number>(0)
   const killerLockerTargetIdRef = useRef<LockerId | null>(null)
   const killerLockerCheckUntilRef = useRef<number>(0)
@@ -220,6 +222,12 @@ export function DBD({ onNextScene }: DBDProps) {
 
   const [winUI, setWinUI] = useState(false)
   const winRef = useRef(false)
+
+  const [readyUI, setReadyUI] = useState(false)
+  const readyRef = useRef(false)
+  useEffect(() => {
+    readyRef.current = readyUI
+  }, [readyUI])
 
   const keysRef = useRef<Record<Key, boolean>>({ w: false, a: false, s: false, d: false })
   const rafRef = useRef<number | null>(null)
@@ -239,7 +247,7 @@ export function DBD({ onNextScene }: DBDProps) {
     zoneStart: number
     zoneWidth: number
     resolved: boolean
-  }>({
+  }>( {
     active: false,
     startedAt: 0,
     duration: 0,
@@ -256,6 +264,7 @@ export function DBD({ onNextScene }: DBDProps) {
   })
 
   const runAudioRef = useRef<HTMLAudioElement | null>(null)
+  const ambienceMusicRef = useRef<HTMLAudioElement | null>(null)
   const skillAppearRef = useRef<HTMLAudioElement | null>(null)
   const skillSuccessRef = useRef<HTMLAudioElement | null>(null)
   const genBlowRef = useRef<HTMLAudioElement | null>(null)
@@ -271,8 +280,10 @@ export function DBD({ onNextScene }: DBDProps) {
   const unhookFailRef = useRef<HTMLAudioElement | null>(null)
 
   const chaseMusicRef = useRef<HTMLAudioElement | null>(null)
-  const chaseStartedRef = useRef(false)
   const endMusicRef = useRef<HTMLAudioElement | null>(null)
+
+  const [isChasingUI, setIsChasingUI] = useState(false)
+  const isChasingUIRef = useRef(false)
 
   const gensCompletePlayedRef = useRef(false)
   const doorOpeningPlayedRef = useRef(false)
@@ -317,6 +328,10 @@ export function DBD({ onNextScene }: DBDProps) {
     hookedHookIdRef.current = hookedHookIdUI
   }, [hookedHookIdUI])
 
+  useEffect(() => {
+    isChasingUIRef.current = isChasingUI
+  }, [isChasingUI])
+
   const playOneShot = (ref: MutableRefObject<HTMLAudioElement | null>) => {
     const a = ref.current
     if (!a) return
@@ -324,10 +339,35 @@ export function DBD({ onNextScene }: DBDProps) {
       a.pause()
       a.currentTime = 0
       void a.play()
-    } catch { }
+    } catch {}
   }
 
-  const startChase = () => {
+  const startAmbience = useCallback(() => {
+    if (!readyRef.current) return
+    const a = ambienceMusicRef.current
+    if (!a) return
+    if (gameOverRef.current || winRef.current) return
+    try {
+      a.loop = true
+      a.volume = 0.055
+      if (a.paused) {
+        a.currentTime = 0
+        void a.play()
+      }
+    } catch {}
+  }, [])
+
+  const stopAmbience = useCallback(() => {
+    const a = ambienceMusicRef.current
+    if (!a) return
+    try {
+      a.pause()
+      a.currentTime = 0
+    } catch {}
+  }, [])
+
+  const startChaseMusic = useCallback(() => {
+    if (!readyRef.current) return
     const a = chaseMusicRef.current
     if (!a) return
     if (gameOverRef.current || winRef.current) return
@@ -338,27 +378,75 @@ export function DBD({ onNextScene }: DBDProps) {
         a.currentTime = 0
         void a.play()
       }
-      chaseStartedRef.current = true
-    } catch { }
-  }
+    } catch {}
+  }, [])
 
-  const stopChase = () => {
+  const stopChaseMusic = useCallback(() => {
     const a = chaseMusicRef.current
     if (!a) return
     try {
       a.pause()
       a.currentTime = 0
-    } catch { }
-  }
+    } catch {}
+  }, [])
+
+  const setChaseState = useCallback(
+    (on: boolean) => {
+      if (gameOverRef.current || winRef.current) {
+        stopAmbience()
+        stopChaseMusic()
+        if (isChasingUIRef.current) {
+          isChasingUIRef.current = false
+          setIsChasingUI(false)
+        }
+        return
+      }
+
+      if (on === isChasingUIRef.current) return
+
+      isChasingUIRef.current = on
+      setIsChasingUI(on)
+
+      if (on) {
+        stopAmbience()
+        startChaseMusic()
+      } else {
+        stopChaseMusic()
+        startAmbience()
+      }
+    },
+    [startAmbience, startChaseMusic, stopAmbience, stopChaseMusic]
+  )
+
+  const pokeBgm = useCallback(() => {
+    if (!readyRef.current) return
+    if (gameOverRef.current || winRef.current) return
+    if (isChasingUIRef.current) {
+      const a = chaseMusicRef.current
+      if (a && a.paused) {
+        try {
+          void a.play()
+        } catch {}
+      }
+    } else {
+      const a = ambienceMusicRef.current
+      if (a && a.paused) {
+        try {
+          void a.play()
+        } catch {}
+      }
+    }
+  }, [])
 
   const startRun = () => {
+    if (!readyRef.current) return
     const a = runAudioRef.current
     if (!a) return
     try {
       a.loop = true
       if (a.paused) a.currentTime = 0
       void a.play()
-    } catch { }
+    } catch {}
   }
 
   const stopRun = () => {
@@ -367,7 +455,7 @@ export function DBD({ onNextScene }: DBDProps) {
     try {
       a.pause()
       a.currentTime = 0
-    } catch { }
+    } catch {}
   }
 
   useEffect(() => {
@@ -377,6 +465,11 @@ export function DBD({ onNextScene }: DBDProps) {
     run.loop = true
     run.volume = VOL
     runAudioRef.current = run
+
+    const ambience = new Audio("/DBD/sounds/ambience.mp3")
+    ambience.loop = true
+    ambience.volume = 0.055
+    ambienceMusicRef.current = ambience
 
     const a1 = new Audio("/DBD/sounds/skill-check.mp3")
     a1.volume = VOL
@@ -440,18 +533,30 @@ export function DBD({ onNextScene }: DBDProps) {
     end.volume = 0.05
     endMusicRef.current = end
 
+    try {
+      stopChaseMusic()
+      stopAmbience()
+      if (isChasingUIRef.current) {
+        isChasingUIRef.current = false
+        setIsChasingUI(false)
+      }
+    } catch {}
+
     return () => {
       try {
         run.pause()
-      } catch { }
+      } catch {}
+      try {
+        ambience.pause()
+      } catch {}
       try {
         chase.pause()
-      } catch { }
+      } catch {}
       try {
         end.pause()
-      } catch { }
+      } catch {}
     }
-  }, [])
+  }, [stopAmbience, stopChaseMusic])
 
   useEffect(() => {
     facingRef.current = facing
@@ -480,10 +585,6 @@ export function DBD({ onNextScene }: DBDProps) {
   useEffect(() => {
     gateRef.current = gate
   }, [gate])
-
-  useEffect(() => {
-    startChase()
-  }, [])
 
   const boundsRef = useRef({ left: 3.8, right: 3.8, top: 1.2, bottom: 3.8 })
   const clampToBounds = (p: { x: number; y: number }) => {
@@ -679,9 +780,16 @@ export function DBD({ onNextScene }: DBDProps) {
 
     try {
       stopRun()
-    } catch { }
+    } catch {}
 
-    stopChase()
+    setChaseState(false)
+    stopAmbience()
+    stopChaseMusic()
+    if (isChasingUIRef.current) {
+      isChasingUIRef.current = false
+      setIsChasingUI(false)
+    }
+
     playOneShot(endMusicRef)
 
     if (interactingRef.current) stopInteract()
@@ -699,15 +807,21 @@ export function DBD({ onNextScene }: DBDProps) {
 
     try {
       stopRun()
-    } catch { }
+    } catch {}
 
-    stopChase()
+    setChaseState(false)
+    stopAmbience()
+    stopChaseMusic()
+    if (isChasingUIRef.current) {
+      isChasingUIRef.current = false
+      setIsChasingUI(false)
+    }
+
     playOneShot(endMusicRef)
 
     if (interactingRef.current) stopInteract()
     clearSkill()
   }
-
 
   const resolveGenSkill = (now: number, success: boolean) => {
     const t = activeTargetRef.current
@@ -794,6 +908,7 @@ export function DBD({ onNextScene }: DBDProps) {
 
         killerIgnorePlayerUntilRef.current = Math.max(killerIgnorePlayerUntilRef.current, now + 3800)
         killerChasingRef.current = false
+        setChaseState(false)
 
         hookEscapeDoneRef.current = 0
         hookNextSkillAtRef.current = 0
@@ -853,6 +968,7 @@ export function DBD({ onNextScene }: DBDProps) {
       hiddenInRef.current = null
       setHiddenIn(null)
       killerChasingRef.current = false
+      setChaseState(false)
       clearMoveKeys()
       setIsStep(false)
 
@@ -881,6 +997,7 @@ export function DBD({ onNextScene }: DBDProps) {
     setHiddenIn(best.id)
 
     killerChasingRef.current = false
+    setChaseState(false)
     return true
   }
 
@@ -976,7 +1093,7 @@ export function DBD({ onNextScene }: DBDProps) {
   const KILLER_KICK_IMPACT_MS = 320
   const KILLER_SABOTAGE_AMOUNT = 14
 
-  const GEN_REGRESS_RATE = 0.95 // progress points per second after a kick, while not being repaired
+  const GEN_REGRESS_RATE = 0.95
 
   const KILLER_LOCKER_CHECK_CHANCE = 0.10
   const KILLER_LOCKER_CHECK_CHANCE_HIDDEN = 0.35
@@ -1034,6 +1151,7 @@ export function DBD({ onNextScene }: DBDProps) {
     setKillerKickingUI(true)
     killerSabotageTargetRef.current = null
     killerChasingRef.current = false
+    setChaseState(false)
   }
 
   const applySabotageKick = (id: GenId) => {
@@ -1166,18 +1284,42 @@ export function DBD({ onNextScene }: DBDProps) {
     setKickedGenUI(null)
     setKillerKickingUI(false)
 
-    chaseStartedRef.current = false
-    stopChase()
-    startChase()
+    stopRun()
+
+    setChaseState(false)
+    stopChaseMusic()
+    stopAmbience()
+    if (isChasingUIRef.current) {
+      isChasingUIRef.current = false
+      setIsChasingUI(false)
+    }
 
     try {
-      stopRun()
-    } catch { }
+      pokeBgm()
+    } catch {}
   }
+
+  const confirmReady = useCallback(() => {
+    if (readyRef.current) return
+    readyRef.current = true
+    setReadyUI(true)
+    try {
+      stopChaseMusic()
+      stopAmbience()
+      startAmbience()
+      pokeBgm()
+    } catch {}
+  }, [pokeBgm, startAmbience, stopAmbience, stopChaseMusic])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      startChase()
+      if (!readyRef.current) {
+        if (e.repeat) return
+        e.preventDefault()
+        return
+      }
+
+      pokeBgm()
 
       if (gameOverRef.current || winRef.current) {
         if (e.repeat) return
@@ -1257,7 +1399,7 @@ export function DBD({ onNextScene }: DBDProps) {
       window.removeEventListener("keydown", onKeyDown as any)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [interactableTarget, allGensDone, PALLETS, LOCKERS])
+  }, [interactableTarget, allGensDone, PALLETS, LOCKERS, pokeBgm])
 
   useEffect(() => {
     const STEP_PULSE_MS = 1000
@@ -1372,6 +1514,12 @@ export function DBD({ onNextScene }: DBDProps) {
     }
 
     const tick = (t: number) => {
+      if (!readyRef.current) {
+        lastRef.current = t
+        rafRef.current = requestAnimationFrame(tick)
+        return
+      }
+
       if (gameOverRef.current || winRef.current) {
         lastRef.current = t
         rafRef.current = requestAnimationFrame(tick)
@@ -1382,7 +1530,6 @@ export function DBD({ onNextScene }: DBDProps) {
       const dt = (t - last) / 1000
       lastRef.current = t
 
-      // Gen regression after kick (only while not being repaired)
       {
         const cur = activeTargetRef.current
         const repairingId =
@@ -1391,20 +1538,20 @@ export function DBD({ onNextScene }: DBDProps) {
         let changed = false
         const nextState = { ...gensRef.current }
 
-          ; (Object.keys(nextState) as GenId[]).forEach((id) => {
-            const st = nextState[id]
-            if (!st) return
-            if (st.done) return
-            if (!st.decayActive) return
-            if (repairingId === id) return
+        ;(Object.keys(nextState) as GenId[]).forEach((id) => {
+          const st = nextState[id]
+          if (!st) return
+          if (st.done) return
+          if (!st.decayActive) return
+          if (repairingId === id) return
 
-            const before = st.progress
-            const after = clamp(before - GEN_REGRESS_RATE * dt, 0, 100)
-            if (Math.abs(after - before) < 0.0001) return
+          const before = st.progress
+          const after = clamp(before - GEN_REGRESS_RATE * dt, 0, 100)
+          if (Math.abs(after - before) < 0.0001) return
 
-            nextState[id] = { ...st, progress: after }
-            changed = true
-          })
+          nextState[id] = { ...st, progress: after }
+          changed = true
+        })
 
         if (changed) {
           gensRef.current = nextState
@@ -1420,13 +1567,11 @@ export function DBD({ onNextScene }: DBDProps) {
         !playerDownRef.current && !playerCarriedRef.current && !playerHookedRef.current && t < playerBoostUntilRef.current
       setPlayerHurtIfNeeded(boostActive)
 
-      // End locker check if it finished
       if (killerLockerTargetIdRef.current && killerLockerCheckUntilRef.current > 0 && t >= killerLockerCheckUntilRef.current) {
         killerLockerCheckUntilRef.current = 0
         killerLockerTargetIdRef.current = null
       }
 
-      // Handle gen kick animation state
       {
         const kick = killerGenKickRef.current
         if (kick) {
@@ -1451,7 +1596,6 @@ export function DBD({ onNextScene }: DBDProps) {
         const playerHooked = playerHookedRef.current
         const ignorePlayer = t < killerIgnorePlayerUntilRef.current
 
-        // Hits
         if (
           !killerStunned &&
           !killerKickingUIRef.current &&
@@ -1503,7 +1647,6 @@ export function DBD({ onNextScene }: DBDProps) {
           }
         }
 
-        // Chase toggles
         if (playerHidden || playerHooked || playerCarried || playerDown || ignorePlayer || killerKickingUIRef.current) {
           killerChasingRef.current = false
         } else if (!killerChasingRef.current) {
@@ -1511,7 +1654,8 @@ export function DBD({ onNextScene }: DBDProps) {
           if (dToPlayer <= KILLER_START_CHASE_RANGE) killerChasingRef.current = true
         }
 
-        // Killer AI movement
+        setChaseState(!!killerChasingRef.current)
+
         if (killerStunned || killerKickingUIRef.current) {
           if (killerStepRef.current) setKillerIsStep(false)
         } else {
@@ -1590,6 +1734,7 @@ export function DBD({ onNextScene }: DBDProps) {
 
                 killerIgnorePlayerUntilRef.current = t + 5200
                 killerChasingRef.current = false
+                setChaseState(false)
                 killerWanderTargetRef.current = pickWanderTargetFarFrom({ x: hook.x, y: hook.y }, 28)
                 killerNextWanderPickAtRef.current = t + (2600 + Math.random() * 2600)
               }
@@ -1642,6 +1787,7 @@ export function DBD({ onNextScene }: DBDProps) {
 
                   carryHookTargetRef.current = findNearestHookId(kpos)
                   killerChasingRef.current = false
+                  setChaseState(false)
 
                   killerLockerTargetIdRef.current = null
                 }
@@ -1720,7 +1866,6 @@ export function DBD({ onNextScene }: DBDProps) {
         }
       }
 
-      // Win check
       if (gateRef.current.opened && !hiddenInRef.current && !playerDownRef.current && !playerCarriedRef.current && !playerHookedRef.current) {
         const p = playerPosRef.current
         const dx = Math.abs((p.x - GATE.x) * ASPECT)
@@ -1731,7 +1876,6 @@ export function DBD({ onNextScene }: DBDProps) {
         }
       }
 
-      // Hook skill loop
       if (playerHookedRef.current) {
         clearAllGenStuff()
         stopRun()
@@ -1759,7 +1903,6 @@ export function DBD({ onNextScene }: DBDProps) {
           }
         }
       } else if (!hiddenInRef.current && !playerDownRef.current && !playerCarriedRef.current) {
-        // Player move
         const speed = PLAYER_BASE_SPEED * (boostActive ? PLAYER_BOOST_MULT : 1)
 
         const k = keysRef.current
@@ -1794,7 +1937,6 @@ export function DBD({ onNextScene }: DBDProps) {
           if (stepRef.current) setIsStep(false)
         }
 
-        // Interaction tick
         const cur = activeTargetRef.current
         if (interactingRef.current && cur) {
           if (cur.kind === "gen") {
@@ -1908,7 +2050,7 @@ export function DBD({ onNextScene }: DBDProps) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
-  }, [GENS, skillUI.active, allGensDone, GATE, HOOKS, PALLETS, LOCKERS, initialGens, initialPallets])
+  }, [GENS, skillUI.active, allGensDone, GATE, HOOKS, PALLETS, LOCKERS, initialGens, initialPallets, setChaseState])
 
   const playerSrcNormal = (() => {
     if (facing === "front") return isStep ? "/DBD/player/front-step.png" : "/DBD/player/front.png"
@@ -1946,16 +2088,6 @@ export function DBD({ onNextScene }: DBDProps) {
     return st.decayFloor
   }, [isInteracting, activeTarget, gens])
 
-  const kickedGenPos = useMemo(() => {
-    if (!kickedGenUI) return null
-    return GENS.find((g) => g.id === kickedGenUI) ?? null
-  }, [kickedGenUI, GENS])
-
-  const killerKickFacing = useMemo<Facing>(() => {
-    if (!kickedGenPos) return killerFacing
-    return killerPos.x < kickedGenPos.x ? "right" : "left"
-  }, [kickedGenPos, killerPos.x, killerFacing])
-
   const isWorkingOnGen = isInteracting && !!activeTarget && activeTarget.kind === "gen"
 
   const SWEEP_START = -135
@@ -1980,15 +2112,11 @@ export function DBD({ onNextScene }: DBDProps) {
 
   const downPos = playerDownUI ? playerDownPosRef.current : null
 
-  const showPlayerNormal =
-    !hiddenIn &&
-    !playerCarriedUI &&
-    !playerHookedUI &&
-    !playerDownUI &&
-    !isWorkingOnGen
+  const showPlayerNormal = !hiddenIn && !playerCarriedUI && !playerHookedUI && !playerDownUI && !isWorkingOnGen
   const showPlayerDown = !hiddenIn && playerDownUI && !playerCarriedUI && !playerHookedUI && !!downPos
 
   const worldHints: WorldHint[] = useMemo(() => {
+    if (!readyUI) return []
     if (gameOverUI || winUI) return []
     if (playerDownUI || playerCarriedUI) return []
     if (playerHookedUI) return []
@@ -2024,6 +2152,7 @@ export function DBD({ onNextScene }: DBDProps) {
 
     return out.slice(0, 2)
   }, [
+    readyUI,
     gameOverUI,
     winUI,
     playerDownUI,
@@ -2073,10 +2202,6 @@ export function DBD({ onNextScene }: DBDProps) {
           height: min(100vh, calc(100vw * 0.66655));
         }
 
-        .dbd-killer--kick {
-  z-index: 4;
-}
-
         .dbd-map {
           position: absolute;
           inset: 0;
@@ -2086,6 +2211,33 @@ export function DBD({ onNextScene }: DBDProps) {
           user-select: none;
           -webkit-user-drag: none;
           pointer-events: none;
+        }
+
+        .dbd-chase-vignette {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 120;
+          opacity: 0;
+          transition: opacity 140ms ease;
+          background: radial-gradient(
+            circle at center,
+            rgba(0,0,0,0) 58%,
+            rgba(255,0,0,0.18) 74%,
+            rgba(255,0,0,0.46) 100%
+          );
+          mix-blend-mode: screen;
+        }
+
+        .dbd-chase-vignette--on {
+          opacity: 1;
+          animation: dbdChasePulse 640ms ease-in-out infinite;
+        }
+
+        @keyframes dbdChasePulse {
+          0% { opacity: 0.58; filter: blur(0px) brightness(1); }
+          50% { opacity: 1; filter: blur(0.6px) brightness(1.06); }
+          100% { opacity: 0.64; filter: blur(0px) brightness(1); }
         }
 
         .dbd-side {
@@ -2176,6 +2328,29 @@ export function DBD({ onNextScene }: DBDProps) {
           font-weight: 900;
           letter-spacing: 0.06em;
           font-size: clamp(13px, 5.2cqw, 20px);
+        }
+
+        .dbd-info {
+          margin-top: 14px;
+          padding-top: 12px;
+          border-top: 1px solid rgba(255,255,255,0.16);
+          opacity: 0.94;
+        }
+
+        .dbd-info__title {
+          margin: 0 0 8px 0;
+          font-weight: 900;
+          letter-spacing: 0.02em;
+          font-size: clamp(13px, 4.9cqw, 16px);
+        }
+
+        .dbd-info__list {
+          margin: 0;
+          padding-left: 18px;
+          display: grid;
+          gap: 8px;
+          font-size: clamp(12px, 4.6cqw, 15px);
+          line-height: 1.35;
         }
 
         .dbd-hud {
@@ -2295,52 +2470,48 @@ export function DBD({ onNextScene }: DBDProps) {
         }
 
         .dbd-gen-wrap {
-  position: absolute;
-  left: var(--x, 50%);
-  top: var(--y, 50%);
-  transform: translate(-50%, -50%);
-  width: clamp(140px, var(--w, 15%), 320px);
-  height: auto;
-  user-select: none;
-  -webkit-user-drag: none;
-  pointer-events: none;
-  z-index: 2;
-}
+          position: absolute;
+          left: var(--x, 50%);
+          top: var(--y, 50%);
+          transform: translate(-50%, -50%);
+          width: clamp(140px, var(--w, 15%), 360px);
+          height: auto;
+          user-select: none;
+          -webkit-user-drag: none;
+          pointer-events: none;
+          z-index: 4;
+        }
 
-/* softer glow area + less blur */
-.dbd-gen-wrap::before {
-  content: "";
-  position: absolute;
-  inset: -14%;
-  border-radius: 999px;
-  opacity: 0;
-  filter: blur(6px);
-  transition: opacity 160ms ease;
-  background: radial-gradient(circle, rgba(255, 0, 0, 0.28), rgba(255, 0, 0, 0) 72%);
-}
+        .dbd-gen-wrap::before {
+          content: "";
+          position: absolute;
+          inset: -14%;
+          border-radius: 999px;
+          opacity: 0;
+          filter: blur(6px);
+          transition: opacity 160ms ease;
+          background: radial-gradient(circle, rgba(255, 0, 0, 0.28), rgba(255, 0, 0, 0) 72%);
+        }
 
-/* lighter highlight on regress */
-.dbd-gen-wrap--regress::before {
-  opacity: 1;
-}
+        .dbd-gen-wrap--regress::before {
+          opacity: 1;
+        }
 
-/* reduce drop-shadows a lot */
-.dbd-gen-wrap--regress {
-  filter:
-    drop-shadow(0 0 6px rgba(255, 0, 0, 0.35))
-    drop-shadow(0 0 14px rgba(255, 0, 0, 0.18));
-}
+        .dbd-gen-wrap--regress {
+          filter:
+            drop-shadow(0 0 6px rgba(255, 0, 0, 0.35))
+            drop-shadow(0 0 14px rgba(255, 0, 0, 0.18));
+        }
 
-
-.dbd-gen-img {
-  position: relative;
-  width: 100%;
-  height: auto;
-  display: block;
-  user-select: none;
-  -webkit-user-drag: none;
-  pointer-events: none;
-}
+        .dbd-gen-img {
+          position: relative;
+          width: 100%;
+          height: auto;
+          display: block;
+          user-select: none;
+          -webkit-user-drag: none;
+          pointer-events: none;
+        }
 
         .dbd-locker {
           transform: translate(calc(-50% + var(--lock-x-fix, -12px)), -50%);
@@ -2366,7 +2537,7 @@ export function DBD({ onNextScene }: DBDProps) {
           transform: translate(-50%, -50%) scale(var(--scale, 1));
           width: clamp(120px, var(--w, 12%), 360px);
           pointer-events: none;
-          z-index: 3;
+          z-index: 6;
         }
 
         .dbd-player--hurt {
@@ -2382,7 +2553,7 @@ export function DBD({ onNextScene }: DBDProps) {
           transform: translate(-50%, -50%) scale(var(--killer-scale, 1));
           width: clamp(120px, var(--w, 12%), 360px);
           pointer-events: none;
-          z-index: 3;
+          z-index: 7;
         }
 
         .dbd-player__img, .dbd-killer__img {
@@ -2439,7 +2610,7 @@ export function DBD({ onNextScene }: DBDProps) {
           inset: 0;
           display: grid;
           place-items: center;
-          z-index: 20;
+          z-index: 40;
           pointer-events: none;
         }
 
@@ -2450,7 +2621,18 @@ export function DBD({ onNextScene }: DBDProps) {
           filter: drop-shadow(0 14px 26px rgba(0,0,0,0.45));
         }
 
+        .skill-bg {
+          position: absolute;
+          inset: -10px;
+          border-radius: 999px;
+          background: rgba(0,0,0,0.78);
+          border: 1px solid rgba(255,255,255,0.14);
+          box-shadow: 0 18px 44px rgba(0,0,0,0.65);
+        }
+
         .skill-svg {
+          position: relative;
+          z-index: 1;
           width: 100%;
           height: 100%;
           display: block;
@@ -2470,6 +2652,7 @@ export function DBD({ onNextScene }: DBDProps) {
           padding: 8px 10px;
           user-select: none;
           pointer-events: none;
+          z-index: 2;
         }
 
         .dbd-hint-world {
@@ -2530,24 +2713,20 @@ export function DBD({ onNextScene }: DBDProps) {
           pointer-events: none;
         }
 
-
-
-/* push actions to bottom + add space from bottom edge */
-.dbd-end__actions{
-  margin-top:auto;
-  padding-bottom:24px;
-
-  display:flex;
-  gap:18px;              /* gap between buttons */
-  justify-content:center;
-  align-items:center;
-  width:100%;
-}
+        .dbd-end__actions{
+          margin-top:auto;
+          padding-bottom:24px;
+          display:flex;
+          gap:18px;
+          justify-content:center;
+          align-items:center;
+          width:100%;
+        }
 
         .dbd-end__btn {
           display:inline-flex;
-  align-items:center;
-  justify-content:center;
+          align-items:center;
+          justify-content:center;
           left: 50%;
           bottom: 26px;
           transform: translateX(-50%);
@@ -2564,13 +2743,98 @@ export function DBD({ onNextScene }: DBDProps) {
         .dbd-end__btn:active {
           transform: translateX(-50%) scale(0.98);
         }
+
+        .dbd-modal {
+          position: fixed;
+          inset: 0;
+          z-index: 2000;
+          display: grid;
+          place-items: center;
+          background: rgba(0,0,0,0.86);
+        }
+
+        .dbd-modal__card {
+          width: min(640px, 92vw);
+          border-radius: 18px;
+          border: 1px solid rgba(255,255,255,0.22);
+          background: rgba(0,0,0,0.72);
+          box-shadow: 0 18px 60px rgba(0,0,0,0.6);
+          padding: 18px 18px;
+          color: rgba(255,255,255,0.94);
+          pointer-events: auto;
+        }
+
+        .dbd-modal__title {
+          margin: 0 0 10px 0;
+          font-weight: 900;
+          letter-spacing: 0.02em;
+          font-size: 22px;
+          color: rgba(255, 70, 70, 0.95);
+          text-shadow: 0 2px 0 rgba(0,0,0,0.8);
+        }
+
+        .dbd-modal__text {
+          margin: 0 0 12px 0;
+          opacity: 0.95;
+          line-height: 1.4;
+        }
+
+        .dbd-modal__list {
+          margin: 0 0 16px 0;
+          padding-left: 18px;
+          display: grid;
+          gap: 8px;
+          line-height: 1.35;
+        }
+
+        .dbd-modal__actions {
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .dbd-modal__btn {
+          pointer-events: auto;
+          border: 1px solid rgba(255,255,255,0.32);
+          background: rgba(255, 70, 70, 0.2);
+          color: rgba(255,255,255,0.96);
+          padding: 12px 16px;
+          border-radius: 12px;
+          font-size: 16px;
+          cursor: pointer;
+          font-weight: 800;
+          letter-spacing: 0.02em;
+        }
+
+        .dbd-modal__btn:active {
+          transform: scale(0.99);
+        }
       `}</style>
+
+      {!readyUI && !gameOverUI && !winUI && (
+        <div className="dbd-modal" role="dialog" aria-label="Ready confirmation">
+          <div className="dbd-modal__card">
+            <h2 className="dbd-modal__title">Are you ready?</h2>
+            <p className="dbd-modal__text">Quick rules before you start:</p>
+            <ul className="dbd-modal__list">
+              <li>This is a DBD-inspired mini game.</li>
+              <li>The killer can randomly check lockers and kick generators to make them regress.</li>
+              <li>When hooked, you must hit the SPACE skill checks. Miss 3 and you die.</li>
+            </ul>
+            <div className="dbd-modal__actions">
+              <button className="dbd-modal__btn" type="button" onClick={confirmReady}>
+                Start
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="dbd-root">
         <div className="dbd-side dbd-side--left" aria-hidden="true">
           <div className="dbd-side__card">
             <h2 className="dbd-side__brand">KNOCKOFF DEAD BY DAYLIGHT MASGU EDITION DEVELOPED BY MAHDOON</h2>
             <p className="dbd-side__title">you became a pro player, show off your skills.</p>
+
             <div className="dbd-legend">
               <div className="dbd-legend__row">
                 <span className="dbd-legend__keys">
@@ -2587,6 +2851,15 @@ export function DBD({ onNextScene }: DBDProps) {
                 </span>
                 <span>Interact</span>
               </div>
+            </div>
+
+            <div className="dbd-info">
+              <p className="dbd-info__title">Game info</p>
+              <ul className="dbd-info__list">
+                <li>DBD-inspired chase and objectives.</li>
+                <li>Killer can randomly check lockers and kick generators to regress them.</li>
+                <li>On hook: hit SPACE skill checks. Miss 3 and you die.</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -2626,6 +2899,7 @@ export function DBD({ onNextScene }: DBDProps) {
             }
           >
             <img className="dbd-map" src="/DBD/world/map.png" alt="DBD world map" draggable={false} />
+            <div className={`dbd-chase-vignette ${isChasingUI ? "dbd-chase-vignette--on" : ""}`} aria-hidden="true" />
 
             <img
               className={`dbd-gate ${gatePulse && !gate.opened ? "dbd-gate--pulse" : ""}`}
@@ -2637,26 +2911,29 @@ export function DBD({ onNextScene }: DBDProps) {
             {GENS.map((g) => {
               const state = gens[g.id]
               const workingThis = isWorkingOnGen && activeTarget?.kind === "gen" && activeTarget.id === g.id
-
               const isRegressing = !!state?.decayActive && !state?.done && !workingThis
+              const isBeingKicked = killerKickingUI && kickedGenUI === g.id
 
-              const src = workingThis
-                ? "/DBD/player/gen-working.png"
-                : state.done
-                  ? "/DBD/world/gen-on.png"
-                  : "/DBD/world/gen-off.png"
+              const src = isBeingKicked
+                ? "/DBD/killer/gen-kick.png"
+                : workingThis
+                  ? "/DBD/player/gen-working.png"
+                  : state.done
+                    ? "/DBD/world/gen-on.png"
+                    : "/DBD/world/gen-off.png"
+
+              const w = isBeingKicked ? "22%" : g.w
 
               return (
                 <div
                   key={g.id}
                   className={`dbd-gen-wrap ${isRegressing ? "dbd-gen-wrap--regress" : ""}`}
-                  style={{ "--x": `${g.x}%`, "--y": `${g.y}%`, "--w": g.w } as CSSProperties}
+                  style={{ "--x": `${g.x}%`, "--y": `${g.y}%`, "--w": w } as CSSProperties}
                 >
                   <img className="dbd-gen-img" src={src} alt="Generator" draggable={false} />
                 </div>
               )
             })}
-
 
             {PALLETS.map((p) => {
               const st = pallets[p.id]
@@ -2698,21 +2975,7 @@ export function DBD({ onNextScene }: DBDProps) {
               />
             ))}
 
-            {killerKickingUI ? (
-              <div
-                className={`dbd-killer dbd-killer--kick ${killerKickFacing === "right" ? "dbd-killer--flip" : ""}`}
-                style={
-                  {
-                    "--x": `${(kickedGenPos?.x ?? killerPos.x)}%`,
-                    "--y": `${(kickedGenPos?.y ?? killerPos.y)}%`,
-                    "--w": "12%",
-                    "--killer-scale": "1.25",
-                  } as CSSProperties
-                }
-              >
-                <img className="dbd-killer__img" src="/DBD/killer/gen-kick.png" alt="Killer" draggable={false} />
-              </div>
-            ) : (
+            {!killerKickingUI && (
               <div
                 className={`dbd-killer ${killerFacing === "right" ? "dbd-killer--flip" : ""}`}
                 style={
@@ -2790,6 +3053,7 @@ export function DBD({ onNextScene }: DBDProps) {
             {skillUI.active && !playerDownUI && !playerCarriedUI && (
               <div className="skill-overlay">
                 <div className="skill-wrap">
+                  <div className="skill-bg" aria-hidden="true" />
                   <svg className="skill-svg" viewBox="0 0 240 240" aria-hidden="true">
                     <defs>
                       <filter id="redGlow" x="-60%" y="-60%" width="220%" height="220%">
@@ -2868,7 +3132,6 @@ export function DBD({ onNextScene }: DBDProps) {
             </div>
           </div>
         )}
-
       </div>
     </>
   )
