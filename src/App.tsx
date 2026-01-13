@@ -28,7 +28,7 @@ type SceneMode = "birthday" | "cookie" | "gym" | "italian" | "dbd" | "next"
 const SCENE_MUSIC: Record<SceneMode, string | null> = {
   birthday: "/music.mp3",
   cookie: "/cookie/cookie.mp3",
-  gym: "/gym/afterlife.mp3",
+  gym: null,
   italian: "/italy/amor-mio.mp3",
   dbd: null,
   next: null,

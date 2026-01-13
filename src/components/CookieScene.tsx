@@ -172,8 +172,8 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
         subtitle: "Black forest depth, rich and glossy with bite",
       },
       {
-        key: "choco-pattern",
-        src: "/cookie/choco-pattern.jpeg",
+        key: "chef-baker",
+        src: "/cookie/chef-baker.jpeg",
         alt: "Chocolate pattern",
         subtitle: "Aesthetic direction, patterns that made the visuals feel premium",
       },
