@@ -1086,8 +1086,8 @@ export function DBD({ onNextScene }: DBDProps) {
     }
   }
 
-  const KILLER_GEN_SABOTAGE_CHANCE = 0.14
-  const KILLER_SABOTAGE_TRY_MIN_MS = 4200
+  const KILLER_GEN_SABOTAGE_CHANCE = 0.15
+  const KILLER_SABOTAGE_TRY_MIN_MS = 4800
   const KILLER_SABOTAGE_TRY_MAX_MS = 8200
   const KILLER_KICK_ANIM_MS = 1500
   const KILLER_KICK_IMPACT_MS = 320
@@ -1097,7 +1097,7 @@ export function DBD({ onNextScene }: DBDProps) {
 
   const KILLER_LOCKER_CHECK_CHANCE = 0.10
   const KILLER_LOCKER_CHECK_CHANCE_HIDDEN = 0.35
-  const KILLER_LOCKER_TRY_MIN_MS = 5200
+  const KILLER_LOCKER_TRY_MIN_MS = 5000
   const KILLER_LOCKER_TRY_MAX_MS = 10000
   const KILLER_LOCKER_CHECK_MS = 700
 
@@ -1402,13 +1402,13 @@ export function DBD({ onNextScene }: DBDProps) {
   }, [interactableTarget, allGensDone, PALLETS, LOCKERS, pokeBgm])
 
   useEffect(() => {
-    const STEP_PULSE_MS = 1000
+    const STEP_PULSE_MS = 500
     const STEP_SHOW_MS = 220
 
     const BASE_GEN_RATE = 2.75
     const BASE_GATE_RATE = 5.5
 
-    const PLAYER_BASE_SPEED = 13
+    const PLAYER_BASE_SPEED = 12.5
     const PLAYER_BOOST_MULT = 1.75
     const PLAYER_BOOST_MS = 2000
 
@@ -2250,7 +2250,7 @@ export function DBD({ onNextScene }: DBDProps) {
             700px
           );
           padding: 10px 10px;
-          overflow: hidden;
+          overflow: visible;
           color: rgba(255,255,255,0.92);
           pointer-events: none;
           z-index: 500;
@@ -2258,7 +2258,7 @@ export function DBD({ onNextScene }: DBDProps) {
         }
 
         .dbd-side--left { left: 0; }
-        .dbd-side--right { right: 0; display: flex; justify-content: flex-start; }
+        .dbd-side--right { right: 0; display: flex; justify-content: flex-end; }
 
         .dbd-side__card {
           pointer-events: none;
@@ -2269,7 +2269,7 @@ export function DBD({ onNextScene }: DBDProps) {
           padding: 10px 10px;
           box-sizing: border-box;
           box-shadow: 0 14px 36px rgba(0,0,0,0.4);
-          overflow: hidden;
+          overflow: visible;
         }
 
         .dbd-side__brand {
@@ -2277,7 +2277,7 @@ export function DBD({ onNextScene }: DBDProps) {
           font-weight: 900;
           letter-spacing: 0.04em;
           text-transform: uppercase;
-          font-size: clamp(14px, 6.4cqw, 20px);
+          font-size: clamp(24px, 6.4cqw, 32px);
           line-height: 1.15;
           color: rgba(255, 70, 70, 0.95);
           text-shadow:
@@ -2286,7 +2286,7 @@ export function DBD({ onNextScene }: DBDProps) {
         }
 
         .dbd-side__title {
-          font-size: clamp(14px, 5.2cqw, 18px);
+          font-size: clamp(18px, 5.2cqw, 24px);
           line-height: 1.25;
           letter-spacing: 0.01em;
           margin: 0 0 clamp(12px, 6cqw, 16px) 0;
@@ -2341,7 +2341,7 @@ export function DBD({ onNextScene }: DBDProps) {
           margin: 0 0 8px 0;
           font-weight: 900;
           letter-spacing: 0.02em;
-          font-size: clamp(13px, 4.9cqw, 16px);
+          font-size: clamp(24px, 4.9cqw, 32px);
         }
 
         .dbd-info__list {
@@ -2349,84 +2349,108 @@ export function DBD({ onNextScene }: DBDProps) {
           padding-left: 18px;
           display: grid;
           gap: 8px;
-          font-size: clamp(12px, 4.6cqw, 15px);
+          font-size: clamp(18px, 4.6cqw, 24px);
           line-height: 1.35;
         }
 
-        .dbd-hud {
-          width: 100%;
-          display: grid;
-          gap: clamp(12px, 6cqw, 18px);
-        }
+/* HUD layout: stack each section vertically and keep images 400x400 without overflowing */
 
-        .dbd-hud__row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: clamp(10px, 5cqw, 16px);
-        }
+.dbd-hud {
+  width: 100%;
+  display: grid;
+  gap: 34px;
+    justify-items: end;
+ transform: translateX(120px);
+}
+  :root {
+  --hud-img: 400px;
+}
 
-        .dbd-hud__gens,
-        .dbd-hud__health {
-          display: flex;
-          align-items: center;
-          justify-content: flex-start;
-          gap: 16px;
-          width: 100%;
-        }
+.dbd-hud,
+.dbd-hud__row,
+.dbd-hud__gens,
+.dbd-hud__health {
+  overflow: visible;
+  justify-items: end;
+  justify-content: end;
+}
 
-        .dbd-hud__num {
-          font-size: 120px;
-          font-weight: 900;
-          line-height: 1;
-          letter-spacing: 0.02em;
-          color: rgba(255,255,255,0.98);
-          min-width: 0;
-          text-align: left;
-          transform: translateX(22px);
-          pointer-events: none;
-        }
+.dbd-hud__icon,
+.dbd-hud__face {
+  width: var(--hud-img) !important;
+  height: var(--hud-img) !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain;
+}
 
-        .dbd-hud__icon {
-          width: 400px;
-          height: 400px;
-          object-fit: contain;
-          flex: 0 0 auto;
-          transform: translateX(-90px);
-          user-select: none;
-          -webkit-user-drag: none;
-          pointer-events: none;
-          filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
-        }
+.dbd-hud__row {
+  display: block;
+}
 
-        .dbd-hud__face {
-          width: 400px;
-          height: 400px;
-          object-fit: contain;
-          flex: 0 0 auto;
-          transform: translateX(-30px);
-          user-select: none;
-          -webkit-user-drag: none;
-          pointer-events: none;
-          filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
-        }
+.dbd-hud__gens,
+.dbd-hud__health {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+      justify-content: flex-end;
 
-        .dbd-hook-tally {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex: 0 0 auto;
-          transform: translateX(69px);
-        }
+  align-items: center;
+  min-width: 0;
+}
 
-        .dbd-hook-tally__i {
-          width: clamp(12px, 4.2cqw, 22px);
-          height: clamp(52px, 16cqw, 110px);
-          border-radius: 999px;
-          border: 2px solid rgba(0,0,0,0.95);
-          background: rgba(255,255,255,0);
-          box-shadow: 0 8px 16px rgba(0,0,0,0.25);
-        }
+.dbd-hud__gens {
+  grid-template-rows: auto auto;
+  gap: 16px;
+}
+
+.dbd-hud__health {
+  grid-template-rows: auto auto;
+  gap: 16px;
+}
+
+.dbd-hud__icon,
+.dbd-hud__face {
+  width: min(1000px, 100%);
+  height: min(1000px, 100%);
+  object-fit: contain;
+  display: block;
+  transform: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
+}
+
+.dbd-hud__num {
+  font-size: 120px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.98);
+  min-width: 0;
+  text-align: center;
+  transform: none;
+  pointer-events: none;
+}
+
+.dbd-hook-tally {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transform: none;
+}
+
+
+.dbd-hook-tally__i {
+  width: clamp(12px, 4.4cqw, 22px);
+  height: clamp(44px, 15cqw, 104px);
+  border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0.95);
+  background: rgba(255, 255, 255, 0);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
+}
 
         .dbd-hook-tally__i--on {
           background: rgba(255,255,255,0.96);
@@ -2813,10 +2837,12 @@ export function DBD({ onNextScene }: DBDProps) {
       {!readyUI && !gameOverUI && !winUI && (
         <div className="dbd-modal" role="dialog" aria-label="Ready confirmation">
           <div className="dbd-modal__card">
-            <h2 className="dbd-modal__title">Are you ready?</h2>
+            <h2 className="dbd-modal__title">Pro Gamer</h2>
+            <p className="dbd-modal__text">You got into gaming a lot and learnt how to play pretty well on PC. I created this 2D DBD replica to see how well you would do in single player DBD against a Bot Killer with AI that I made</p>
             <p className="dbd-modal__text">Quick rules before you start:</p>
             <ul className="dbd-modal__list">
-              <li>This is a DBD-inspired mini game.</li>
+              <li>DBD-inspired chase and objectives.</li>
+              <li>Hiding in lockers end chase, but be careful because if you are caught you are going straight to the hook</li>
               <li>The killer can randomly check lockers and kick generators to make them regress.</li>
               <li>When hooked, you must hit the SPACE skill checks. Miss 3 and you die.</li>
             </ul>
@@ -2833,7 +2859,7 @@ export function DBD({ onNextScene }: DBDProps) {
         <div className="dbd-side dbd-side--left" aria-hidden="true">
           <div className="dbd-side__card">
             <h2 className="dbd-side__brand">KNOCKOFF DEAD BY DAYLIGHT MASGU EDITION DEVELOPED BY MAHDOON</h2>
-            <p className="dbd-side__title">you became a pro player, show off your skills.</p>
+            <p className="dbd-side__title">you need to beat this game in order to proceed to the next level.</p>
 
             <div className="dbd-legend">
               <div className="dbd-legend__row">
@@ -2857,6 +2883,7 @@ export function DBD({ onNextScene }: DBDProps) {
               <p className="dbd-info__title">Game info</p>
               <ul className="dbd-info__list">
                 <li>DBD-inspired chase and objectives.</li>
+                <li>Hiding in lockers end chase, but be careful because if you are caught you are going straight to the hook</li>
                 <li>Killer can randomly check lockers and kick generators to regress them.</li>
                 <li>On hook: hit SPACE skill checks. Miss 3 and you die.</li>
               </ul>
@@ -2864,28 +2891,29 @@ export function DBD({ onNextScene }: DBDProps) {
           </div>
         </div>
 
-        <div className="dbd-side dbd-side--right" aria-hidden="true">
-          <div className="dbd-side__card">
-            <div className="dbd-hud">
-              <div className="dbd-hud__row">
-                <div className="dbd-hud__gens">
-                  <div className="dbd-hud__num">{gensLeft}</div>
-                  <img className="dbd-hud__icon" src="/DBD/hud/gen.png" alt="" draggable={false} />
-                </div>
-              </div>
+<div className="dbd-side dbd-side--right" aria-hidden="true">
+  <div className="dbd-side__card">
+    <div className="dbd-hud">
+      <div className="dbd-hud__row">
+        <div className="dbd-hud__gens">
+          <img className="dbd-hud__icon" src="/DBD/hud/gen.png" alt="" draggable={false} />
+          <div className="dbd-hud__num">{gensLeft}</div>
+        </div>
+      </div>
 
-              <div className="dbd-hud__row">
-                <div className="dbd-hud__health">
-                  <div className="dbd-hook-tally">
-                    <div className={`dbd-hook-tally__i ${isTallyOn(1) ? "dbd-hook-tally__i--on" : ""}`} />
-                    <div className={`dbd-hook-tally__i ${isTallyOn(2) ? "dbd-hook-tally__i--on" : ""}`} />
-                  </div>
-                  <img className="dbd-hud__face" src={faceSrc} alt="" draggable={false} />
-                </div>
-              </div>
-            </div>
+      <div className="dbd-hud__row">
+        <div className="dbd-hud__health">
+          <img className="dbd-hud__face" src={faceSrc} alt="" draggable={false} />
+          <div className="dbd-hook-tally">
+            <div className={`dbd-hook-tally__i ${isTallyOn(1) ? "dbd-hook-tally__i--on" : ""}`} />
+            <div className={`dbd-hook-tally__i ${isTallyOn(2) ? "dbd-hook-tally__i--on" : ""}`} />
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 
         <div className="dbd-shell">
           <div

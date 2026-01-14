@@ -415,7 +415,7 @@ function FloatingDrink({
       </mesh>
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, -0.04, 0]}>
         <ringGeometry args={[0.30, 0.37, 64]} />
-        <meshBasicMaterial transparent opacity={ringOpacity * 0.7} color={streakMode ? "#ff9b3d" : "#b26bff"} />
+        <meshBasicMaterial transparent opacity={ringOpacity * 0.7} color={streakMode ? "#ffd166" : "#b26bff"} />
       </mesh>
 
       <GroundedClone url={url} fitHeight={fitHeight} />
@@ -520,7 +520,12 @@ function GymWorld({
       <group position={[0, WORLD_Y, 0]} scale={WORLD_SCALE}>
         <GroundedClone url={playerUrl} position={[0, 0, 0]} scale={1.1} />
 
-        <GroundedClone url="/gym/dumbbell_barbell_bench_-_9mb.glb" position={[2.25, 0, -0.25]} rotation={[0, -0.9, 0]} scale={1.0} />
+        <GroundedClone
+          url="/gym/dumbbell_barbell_bench_-_9mb.glb"
+          position={[2.25, 0, -0.25]}
+          rotation={[0, -0.9, 0]}
+          scale={1.0}
+        />
         <GroundedClone url="/gym/stationary_bike.glb" position={[-1.55, 0, 1.22]} rotation={[0, 0.95, 0]} fitHeight={0.95} />
         <GroundedClone url="/gym/dumbbells.glb" position={[-0.65, 0, 1.35]} rotation={[0, 0.25, 0]} scale={1.2} />
 
@@ -568,7 +573,7 @@ function makeFakeLeaderboard(userScore: number): LeaderRow[] {
   })
 
   const rows: LeaderRow[] = [
-    { name: "Mahdoon", score: 999_999, isTop: true },
+    { name: "Mahdoon", score: 420_069, isTop: true },
     { name: "Masgu", score: Math.max(0, Math.floor(userScore)), isUser: true },
     ...otherRows,
   ]
@@ -594,6 +599,46 @@ function makeFakeLeaderboard(userScore: number): LeaderRow[] {
   if (ensureUser === -1) sorted.splice(1, 0, { name: "Masgu", score: Math.max(0, Math.floor(userScore)), isUser: true })
 
   return sorted.slice(0, 8)
+}
+
+function GymProgressModal({ onContinue }: { onContinue: () => void }) {
+  return (
+    <div className="gym-startOverlay" role="dialog" aria-modal="true">
+      <div className="gym-startCard">
+        <div className="gym-startTitle">gym progress</div>
+
+        <div className="howWrap">
+          <div className="howText" style={{ gridColumn: "1 / -1" }}>
+            <h3>message</h3>
+            <div
+              style={{
+                textAlign: "left",
+                lineHeight: 1.65,
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                fontWeight: 900,
+                fontSize: "1.35rem",
+                opacity: 0.92,
+              }}
+            >
+              <div>
+                You worked really hard, stuck to your diet, and managed to build a sexy body despite all the hormonal imbalances and health issues. Be proud of yourself!
+              </div>
+              <div style={{ marginTop: 14 }}>
+                This game is intended to simulate a workout that you have at the gym with a Guitar Hero inspired Mini Game.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="gym-startRow">
+          <button className="gym-startBtn primary" type="button" onClick={onContinue}>
+            continue
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function GymScene({ onNextScene }: GymSceneProps) {
@@ -630,7 +675,7 @@ export function GymScene({ onNextScene }: GymSceneProps) {
   const [misses, setMisses] = useState(0)
 
   const [countdown, setCountdown] = useState<number | null>(null)
-const countdownIntervalRef = useRef<number | null>(null)
+  const countdownIntervalRef = useRef<number | null>(null)
 
   const maxComboRef = useRef(0)
 
@@ -644,15 +689,17 @@ const countdownIntervalRef = useRef<number | null>(null)
 
   const [endModalKey, setEndModalKey] = useState(0)
 
-  const [showStartModal, setShowStartModal] = useState(true)
+  const [showProgressModal, setShowProgressModal] = useState(true)
+  const [showStartModal, setShowStartModal] = useState(false)
+
   const [starting, setStarting] = useState(false)
   const startTimerRef = useRef<number | null>(null)
 
   const stopCountdown = useCallback(() => {
-  if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current)
-  countdownIntervalRef.current = null
-  setCountdown(null)
-}, [])
+    if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current)
+    countdownIntervalRef.current = null
+    setCountdown(null)
+  }, [])
 
   useEffect(() => {
     pausedRef.current = paused
@@ -671,15 +718,15 @@ const countdownIntervalRef = useRef<number | null>(null)
     if (ended) setEndModalKey((k) => k + 1)
   }, [ended])
 
-useEffect(() => {
-  return () => {
-    if (startTimerRef.current) window.clearTimeout(startTimerRef.current)
-    startTimerRef.current = null
+  useEffect(() => {
+    return () => {
+      if (startTimerRef.current) window.clearTimeout(startTimerRef.current)
+      startTimerRef.current = null
 
-    if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current)
-    countdownIntervalRef.current = null
-  }
-}, [])
+      if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current)
+      countdownIntervalRef.current = null
+    }
+  }, [])
 
   const STREAK_THRESHOLD = 18
   const streakMode = combo >= STREAK_THRESHOLD
@@ -1013,24 +1060,25 @@ useEffect(() => {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [attemptHit, started])
 
-const retry = useCallback(async () => {
-  if (startTimerRef.current) window.clearTimeout(startTimerRef.current)
-  startTimerRef.current = null
+  const retry = useCallback(async () => {
+    if (startTimerRef.current) window.clearTimeout(startTimerRef.current)
+    startTimerRef.current = null
 
-  stopCountdown()
+    stopCountdown()
 
-  setStarting(false)
-  setShowStartModal(false)
+    setStarting(false)
+    setShowStartModal(false)
+    setShowProgressModal(false)
 
-  cleanupAudio()
-  setStarted(false)
-  setReady(false)
-  setEnded(false)
-  setPaused(false)
-  resetRunState()
+    cleanupAudio()
+    setStarted(false)
+    setReady(false)
+    setEnded(false)
+    setPaused(false)
+    resetRunState()
 
-  await primeAndStart()
-}, [cleanupAudio, primeAndStart, resetRunState, stopCountdown])
+    await primeAndStart()
+  }, [cleanupAudio, primeAndStart, resetRunState, stopCountdown])
 
   const songPct = duration > 0 ? clamp(songTime / duration, 0, 1) : 0
 
@@ -1055,40 +1103,45 @@ const retry = useCallback(async () => {
     return idx >= 0 ? idx + 1 : null
   }, [leaderboard])
 
-const START_COUNTDOWN_SECONDS = 3
-const START_DELAY_MS = START_COUNTDOWN_SECONDS * 1000
+  const START_COUNTDOWN_SECONDS = 3
+  const START_DELAY_MS = START_COUNTDOWN_SECONDS * 1000
 
-const onStartClick = useCallback(() => {
-  if (starting || started || ready) return
+  const onStartClick = useCallback(() => {
+    if (starting || started || ready) return
 
-  setShowStartModal(false)
-  setStarting(true)
+    setShowStartModal(false)
+    setStarting(true)
 
-  if (startTimerRef.current) window.clearTimeout(startTimerRef.current)
-  stopCountdown()
-
-  setCountdown(START_COUNTDOWN_SECONDS)
-  countdownIntervalRef.current = window.setInterval(() => {
-    setCountdown((c) => {
-      if (c === null) return c
-      const next = c - 1
-      if (next <= 0) {
-        if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current)
-        countdownIntervalRef.current = null
-        return 0
-      }
-      return next
-    })
-  }, 1000)
-
-  startTimerRef.current = window.setTimeout(async () => {
-    const ok = await primeAndStart()
-    setStarting(false)
-    startTimerRef.current = null
+    if (startTimerRef.current) window.clearTimeout(startTimerRef.current)
     stopCountdown()
-    if (!ok) setShowStartModal(true)
-  }, START_DELAY_MS)
-}, [primeAndStart, ready, started, starting, stopCountdown])
+
+    setCountdown(START_COUNTDOWN_SECONDS)
+    countdownIntervalRef.current = window.setInterval(() => {
+      setCountdown((c) => {
+        if (c === null) return c
+        const next = c - 1
+        if (next <= 0) {
+          if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = null
+          return 0
+        }
+        return next
+      })
+    }, 1000)
+
+    startTimerRef.current = window.setTimeout(async () => {
+      const ok = await primeAndStart()
+      setStarting(false)
+      startTimerRef.current = null
+      stopCountdown()
+      if (!ok) setShowStartModal(true)
+    }, START_DELAY_MS)
+  }, [primeAndStart, ready, started, starting, stopCountdown])
+
+  const onContinueFromProgress = useCallback(() => {
+    setShowProgressModal(false)
+    setShowStartModal(true)
+  }, [])
 
   return (
     <div className={`gym-scene ${mounted ? "is-mounted" : ""}`}>
@@ -1871,7 +1924,8 @@ const onStartClick = useCallback(() => {
     place-items: center;
   }
   .howAid img {
-    width: min(620px, 100%);
+    width: min(920px, 100%);
+    max-width: 92vw;
     height: auto;
     display: block;
     filter: drop-shadow(0 18px 60px rgba(0,0,0,0.45));
@@ -1894,6 +1948,10 @@ const onStartClick = useCallback(() => {
     -webkit-backdrop-filter: blur(10px);
     transition: transform 160ms ease, filter 160ms ease, opacity 160ms ease;
     font-size: 1.25rem;
+  }
+  .gym-startBtn.primary {
+    background: linear-gradient(90deg, rgba(109,106,255,0.85), rgba(76,201,240,0.75), rgba(181,23,255,0.8));
+    border-color: rgba(255,255,255,0.12);
   }
   .gym-startBtn:hover { transform: translateY(-1px); filter: brightness(1.05); }
   .gym-startBtn:active { transform: translateY(0px) scale(0.99); filter: brightness(0.98); }
@@ -2137,13 +2195,13 @@ const onStartClick = useCallback(() => {
         </div>
 
         {countdown !== null && !started && !ended && (
-  <div className="countdownOverlay" role="dialog" aria-modal="true">
-    <div className="countdownCard">
-      <div className="countdownNumber">{countdown === 0 ? "GO" : countdown}</div>
-      <div className="countdownHint">GET READY</div>
-    </div>
-  </div>
-)}
+          <div className="countdownOverlay" role="dialog" aria-modal="true">
+            <div className="countdownCard">
+              <div className="countdownNumber">{countdown === 0 ? "GO" : countdown}</div>
+              <div className="countdownHint">GET READY</div>
+            </div>
+          </div>
+        )}
 
         <div className={`nowPlayingBox ${streakMode ? "is-streak" : ""}`}>
           <button className="pauseBtn" type="button" onClick={togglePause} aria-label="Pause">
@@ -2254,7 +2312,9 @@ const onStartClick = useCallback(() => {
         )}
       </div>
 
-      {showStartModal && !started && !ended && (
+      {!started && !ended && showProgressModal && <GymProgressModal onContinue={onContinueFromProgress} />}
+
+      {!started && !ended && !showProgressModal && showStartModal && (
         <div className="gym-startOverlay" role="dialog" aria-modal="true">
           <div className="gym-startCard">
             <div className="gym-startTitle">how to play</div>
@@ -2263,11 +2323,10 @@ const onStartClick = useCallback(() => {
               <div className="howText">
                 <h3>rules</h3>
                 <ul>
-                  <li>hit A S K L when the notes reach the line</li>
+                  <li>hit 'A S K L' when the notes reach the line</li>
                   <li>timing matters, closer to the line means more points</li>
                   <li>miss resets your combo, keep a streak to ramp multiplier</li>
                   <li>press ESC to pause or resume</li>
-                  <li>volume is set low by default (0.05)</li>
                 </ul>
               </div>
 

@@ -1002,14 +1002,14 @@ const stickerStyle: React.CSSProperties = {
 
     const modalTitleStyle: React.CSSProperties = {
         fontWeight: 980,
-        fontSize: "clamp(20px, 2.2vw, 30px)",
+        fontSize: "clamp(36px, 2.2vw, 30px)",
         letterSpacing: "0.02em",
         lineHeight: 1.1,
     }
 
     const modalSubStyle: React.CSSProperties = {
         opacity: 0.86,
-        fontSize: 14,
+        fontSize: 24,
         lineHeight: 1.35,
     }
 
@@ -1299,8 +1299,8 @@ const stickerStyle: React.CSSProperties = {
                         }}
                     >
                         <div style={modalTopStyle}>
-                            <div style={modalTitleStyle}>learnt italian this year, are you ready to test yourself?</div>
-                            <div style={modalSubStyle}>NO CHEATING!!! 😛</div>
+                            <div style={modalTitleStyle}>Learn Italian</div>
+                            <div style={modalSubStyle}>You learned a new language! Italian at that. I have absolutely no clue why italian but you go girl! Now to ensure that you are not a liar and actually did get good at italian, lets see you get a full score on this Italian Exam. NO CHEATING!!! 😛 P.S You can play with the emojis scattered around!</div>
                         </div>
 
                         <div style={modalMediaWrap}>

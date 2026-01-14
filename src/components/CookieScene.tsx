@@ -114,68 +114,68 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
         key: "cookies-float",
         src: "/cookie/cookies-float.jpeg",
         alt: "Cookies floating",
-        subtitle: "Launch day energy, the first real batch that felt like a brand",
+        subtitle: "Assortment of all the different delicious flavours available.",
       },
       {
         key: "chefs-hand",
         src: "/cookie/chefs-hand.jpeg",
         alt: "Chef hand",
-        subtitle: "Hands-on craft, the tiny details that make the difference",
+        subtitle: "The baker's beautiful hand, showcasing the cookie with care",
       },
       {
         key: "classic",
         src: "/cookie/classic.jpeg",
         alt: "Classic cookie",
-        subtitle: "Classic and clean, the one that makes everyone happy",
+        subtitle: "Cookies so elegant you can make statues of them",
       },
       {
         key: "cereal-box",
         src: "/cookie/cereal-box.jpeg",
         alt: "Cereal box cookie",
-        subtitle: "Playful energy, snack vibes but still premium",
+        subtitle: "I would not mind being killed by a cereal killer",
       },
       {
         key: "smores",
         src: "/cookie/smores.jpeg",
         alt: "Smores cookie",
-        subtitle: "S’mores mood, gooey and dramatic in the best way",
+        subtitle: "Oh my darkness, oh my sweet decadence",
         zoomObjectPosition: "50% 70%",
       },
       {
         key: "choco-focused",
         src: "/cookie/choco-focused.jpeg",
         alt: "Chocolate focused cookie",
-        subtitle: "Signature chocolate look, refined and ready for photos",
+        subtitle: "Close up on perfection, with the other GOATs at the back",
       },
       {
         key: "red-velvet",
         src: "/cookie/red-velvet-focused.jpeg",
         alt: "Red velvet cookie",
-        subtitle: "Red velvet moment, bold color and soft crumb",
+        subtitle: "Red veelvet cookie ALMOST as pretty as the baker herself",
       },
       {
         key: "pistach",
         src: "/cookie/pistach.jpeg",
         alt: "Pistach cookie",
-        subtitle: "Pistachio glow, the flavor that makes people pause",
+        subtitle: "I don't always eat pistachio, but when I do, I prefer Masgu's",
       },
       {
         key: "pistachio-focused",
         src: "/cookie/pistachio-focused.jpeg",
         alt: "Pistachio focused cookie",
-        subtitle: "That pistachio signature, instantly recognizable",
+        subtitle: "Another angle on the pistachio goodness",
       },
       {
         key: "black-forest",
         src: "/cookie/black-forest.jpeg",
         alt: "Black forest cookie",
-        subtitle: "Black forest depth, rich and glossy with bite",
+        subtitle: "Have you ever seen any other bakery do cookies as creative as this?",
       },
       {
         key: "chef-baker",
         src: "/cookie/chef-baker.jpeg",
         alt: "Chocolate pattern",
-        subtitle: "Aesthetic direction, patterns that made the visuals feel premium",
+        subtitle: "THE GORGEOUS SWEET BAKER BEHIND THE MAGIC",
       },
     ],
     []
@@ -184,6 +184,8 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [mounted, setMounted] = useState(false)
   const [isZoomed, setIsZoomed] = useState(false)
+
+  const [showIntro, setShowIntro] = useState(true)
 
   const [showGate, setShowGate] = useState(false)
   const [cookieClicks, setCookieClicks] = useState(0)
@@ -232,6 +234,10 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
   const prev = useCallback(() => {
     setActiveIndex((p) => (p - 1 + slides.length) % slides.length)
   }, [slides.length])
+
+  const closeIntro = useCallback(() => {
+    setShowIntro(false)
+  }, [])
 
   const openGate = useCallback(() => {
     if (!allSeen) return
@@ -367,6 +373,14 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (showIntro) {
+        if (e.key === "Escape" || e.key === "Enter") {
+          e.preventDefault()
+          closeIntro()
+        }
+        return
+      }
+
       if (showGate) {
         if (e.key === "Escape") {
           e.preventDefault()
@@ -408,7 +422,7 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
 
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [closeGate, isZoomed, next, prev, showGate])
+  }, [closeGate, closeIntro, isZoomed, next, prev, showGate, showIntro])
 
   const gatePct = Math.round((Math.min(cookieClicks, REQUIRED_CLICKS) / REQUIRED_CLICKS) * 100)
 
@@ -421,11 +435,11 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
   }, [cookieClicks, gateComplete])
 
   const gateMotivation = useMemo(() => {
-    if (gateComplete) return "good job chef baker queen masgu 👑"
+    if (gateComplete) return "good job baker queen masgu 👑"
     if (cookieClicks >= 75) return "almost there! last stretch!"
     if (cookieClicks >= 50) return "halfway! keep going!"
     if (cookieClicks >= 25) return "nice start! keep clicking!"
-    return "before you move on, click this cookie 100 times"
+    return "in order to continue, you must participate in this cookie clicker game to prove you are a true baker. click this cookie 100 times"
   }, [cookieClicks, gateComplete])
 
   const footerButtonDisabled = !allSeen
@@ -1147,6 +1161,28 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
           z-index: 5;
         }
 
+        .cookie-intro-text {
+          width: min(620px, 88vw);
+          max-width: 100%;
+          color: rgba(212,209,189,0.96);
+          font-size: clamp(1.02rem, 1.55vw, 1.12rem);
+          line-height: 1.65;
+          letter-spacing: 0.03em;
+          text-align: center;
+          padding: 0.25rem 0.65rem 0.2rem;
+          position: relative;
+          z-index: 5;
+        }
+
+        .cookie-intro-actions {
+          width: min(560px, 88vw);
+          display: flex;
+          justify-content: center;
+          padding-top: 0.35rem;
+          position: relative;
+          z-index: 5;
+        }
+
         .cookie-confetti-screen {
           position: absolute;
           inset: 0;
@@ -1279,13 +1315,7 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
             <img src={active.src} alt={active.alt} />
             <button className="cookie-zoom-close" type="button" aria-label="Close" onClick={() => setIsZoomed(false)}>
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path
-                  d="M7 7L17 17M17 7L7 17"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.6"
-                  strokeLinecap="round"
-                />
+                <path d="M7 7L17 17M17 7L7 17" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
               </svg>
             </button>
           </div>
@@ -1312,6 +1342,34 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
               }
             />
           ))}
+        </div>
+      )}
+
+      {showIntro && (
+        <div className="cookie-gate-overlay" role="dialog" aria-modal="true" aria-label="Bake Bar Experience">
+          <div className="cookie-gate-card">
+            <button className="cookie-gate-close" type="button" aria-label="Close" onClick={closeIntro}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M7 7L17 17M17 7L7 17" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+              </svg>
+            </button>
+
+            <div className="cookie-gate-title">Bake Bar Experience</div>
+
+            <div className="cookie-gate-body">
+              <div className="cookie-intro-text">
+                You pursued your passion and were able to manage baking cookies for tons of people while doing social media
+                marketing, photoshoots, deliveries, handling customers, & etc. You just got unlucky with investments but you
+                gained valuable experience and Bake Bar will get the comeback it deserves Inshallah. Never give up.
+              </div>
+
+              <div className="cookie-intro-actions">
+                <button type="button" className="cookie-gate-continue" onClick={closeIntro}>
+                  START
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1354,13 +1412,7 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
 
             <button className="cookie-gate-close" type="button" aria-label="Close" onClick={closeGate}>
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path
-                  d="M7 7L17 17M17 7L7 17"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.6"
-                  strokeLinecap="round"
-                />
+                <path d="M7 7L17 17M17 7L7 17" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
               </svg>
             </button>
 
@@ -1373,22 +1425,14 @@ export function CookieScene({ onNextScene }: CookieSceneProps) {
               ) : (
                 <button type="button" className="cookie-gate-cookie" onClick={handleGateCookieClick} aria-label="Click cookie">
                   <div className="cookie-gate-cookie-imgWrap">
-                    <img
-                      key={cookieBop}
-                      className="cookie-gate-cookie-img"
-                      src="/cookie/cookie.png"
-                      alt="Cookie"
-                      draggable={false}
-                    />
+                    <img key={cookieBop} className="cookie-gate-cookie-img" src="/cookie/cookie.png" alt="Cookie" draggable={false} />
                   </div>
                 </button>
               )}
 
               <div className="cookie-gate-progressWrap" aria-label="Progress">
                 <div className="cookie-gate-progressTop">
-                  <span>
-                    {cookieClicks}/100
-                  </span>
+                  <span>{cookieClicks}/100</span>
                   <span>{gatePct}%</span>
                 </div>
                 <div className="cookie-gate-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={gatePct}>

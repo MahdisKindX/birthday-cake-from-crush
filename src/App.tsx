@@ -2,6 +2,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { Environment, OrbitControls } from "@react-three/drei"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { CSSProperties } from "react"
 import type { Group } from "three"
 import { Vector3 } from "three"
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib"
@@ -11,11 +12,11 @@ import { Table } from "./models/table"
 import { PictureFrame } from "./models/pictureFrame"
 import { Fireworks } from "./components/Fireworks"
 import { BirthdayCard } from "./components/BirthdayCard"
-// import { ReflectionOverlay } from "./components/ReflectionOverlay"
 import { CookieScene } from "./components/CookieScene"
 import { GymScene } from "./components/GymScene"
 import { ItalianScene } from "./components/ItalianScene"
 import { DBD } from "./components/DBD"
+import { Reflection } from "./components/Reflection"
 
 import "./App.css"
 
@@ -23,15 +24,18 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 const lerp = (from: number, to: number, t: number) => from + (to - from) * t
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
 
-type SceneMode = "birthday" | "cookie" | "gym" | "italian" | "dbd" | "next"
+type SceneMode = "birthday" | "cookie" | "italian" | "dbd" | "gym" | "reflection" | "end"
+
+const SCENE_ORDER: SceneMode[] = ["birthday", "cookie", "italian", "dbd", "gym", "reflection", "end"]
 
 const SCENE_MUSIC: Record<SceneMode, string | null> = {
   birthday: "/music.mp3",
   cookie: "/cookie/cookie.mp3",
-  gym: null,
   italian: "/italy/amor-mio.mp3",
   dbd: null,
-  next: null,
+  gym: null,
+  reflection: "/Again.mp3",
+    end: null
 }
 
 type BirthdayCardConfig = {
@@ -95,7 +99,6 @@ const TYPED_LINES = [
 const TYPED_CHAR_DELAY = 100
 const POST_TYPING_SCENE_DELAY = 1000
 const CURSOR_BLINK_INTERVAL = 480
-// const ACHIEVEMENTS_PROMPT_DELAY = 10000
 
 const BIRTHDAY_CARDS: ReadonlyArray<BirthdayCardConfig> = [
   {
@@ -329,7 +332,7 @@ function EnvironmentBackgroundController({ intensity }: EnvironmentBackgroundCon
 }
 
 function StartModal({ onStart }: { onStart: () => void }) {
-  const overlay: React.CSSProperties = {
+  const overlay: CSSProperties = {
     position: "absolute",
     inset: 0,
     zIndex: 120,
@@ -341,7 +344,7 @@ function StartModal({ onStart }: { onStart: () => void }) {
     padding: 16,
   }
 
-  const card: React.CSSProperties = {
+  const card: CSSProperties = {
     width: "min(760px, 92vw)",
     borderRadius: 24,
     border: "1px solid rgba(255,255,255,0.16)",
@@ -351,13 +354,13 @@ function StartModal({ onStart }: { onStart: () => void }) {
     color: "rgba(255,255,255,0.96)",
   }
 
-  const top: React.CSSProperties = {
+  const top: CSSProperties = {
     padding: "18px 18px 10px",
     display: "grid",
     gap: 8,
   }
 
-  const title: React.CSSProperties = {
+  const title: CSSProperties = {
     fontWeight: 950,
     letterSpacing: "0.06em",
     textTransform: "uppercase",
@@ -365,24 +368,24 @@ function StartModal({ onStart }: { onStart: () => void }) {
     lineHeight: 1.1,
   }
 
-  const sub: React.CSSProperties = {
+  const sub: CSSProperties = {
     opacity: 0.82,
     fontSize: 14,
     lineHeight: 1.35,
   }
 
-  const divider: React.CSSProperties = {
+  const divider: CSSProperties = {
     height: 1,
     background: "rgba(255,255,255,0.14)",
   }
 
-  const footer: React.CSSProperties = {
+  const footer: CSSProperties = {
     padding: "14px 18px 18px",
     display: "flex",
     justifyContent: "flex-end",
   }
 
-  const btn: React.CSSProperties = {
+  const btn: CSSProperties = {
     borderRadius: 16,
     padding: "12px 16px",
     border: "1px solid rgba(255,255,255,0.16)",
@@ -438,7 +441,121 @@ function GlassActionOverlay({
   )
 }
 
+function EndScene() {
+  const wrap: CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    zIndex: 140,
+    background: "#000",
+  }
+
+  const video: CSSProperties = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  }
+
+  return (
+    <div style={wrap}>
+      <video src="/end.mp4" style={video} autoPlay playsInline controls />
+    </div>
+  )
+}
+
+function SceneNav({
+  disabled,
+  onPrev,
+  onNext,
+}: {
+  disabled: boolean
+  onPrev: () => void
+  onNext: () => void
+}) {
+  const wrap: CSSProperties = {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 130,
+    display: "flex",
+    justifyContent: "space-between",
+    pointerEvents: "none",
+    padding: 10,
+  }
+
+  const btnBase: CSSProperties = {
+    pointerEvents: "auto",
+    borderRadius: 14,
+    padding: "10px 14px",
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(10,10,12,0.38)",
+    color: "rgba(255,255,255,0.92)",
+    fontWeight: 900,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0 : 0,
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
+    boxShadow: "0 18px 60px rgba(0,0,0,0.35)",
+    transition: "opacity 140ms ease, transform 140ms ease",
+    transform: "translateY(-4px)",
+  }
+
+  const leftZone: CSSProperties = {
+    pointerEvents: "auto",
+    width: 120,
+    height: 64,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
+  }
+
+  const rightZone: CSSProperties = {
+    pointerEvents: "auto",
+    width: 120,
+    height: 64,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
+  }
+
+  const [hoverL, setHoverL] = useState(false)
+  const [hoverR, setHoverR] = useState(false)
+
+  const leftBtn: CSSProperties = {
+    ...btnBase,
+    opacity: disabled ? 0 : hoverL ? 1 : 0,
+    transform: disabled ? "translateY(-4px)" : hoverL ? "translateY(0px)" : "translateY(-4px)",
+  }
+
+  const rightBtn: CSSProperties = {
+    ...btnBase,
+    opacity: disabled ? 0 : hoverR ? 1 : 0,
+    transform: disabled ? "translateY(-4px)" : hoverR ? "translateY(0px)" : "translateY(-4px)",
+  }
+
+  return (
+    <div style={wrap}>
+      <div onMouseEnter={() => setHoverL(true)} onMouseLeave={() => setHoverL(false)} style={leftZone}>
+        <button style={leftBtn} disabled={disabled} onClick={onPrev}>
+          prev
+        </button>
+      </div>
+
+      <div onMouseEnter={() => setHoverR(true)} onMouseLeave={() => setHoverR(false)} style={rightZone}>
+        <button style={rightBtn} disabled={disabled} onClick={onNext}>
+          next
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
+  const appContainerRef = useRef<HTMLDivElement | null>(null)
+
   const [sceneMode, setSceneMode] = useState<SceneMode>("birthday")
 
   const [hasStarted, setHasStarted] = useState(false)
@@ -459,33 +576,26 @@ export default function App() {
   const currentTrackRef = useRef<string | null>(null)
   const needsUnlockRef = useRef(false)
 
-  // reflection/achievements (disabled for now)
-  // const [showReflectionButton, setShowReflectionButton] = useState(false)
-  // const [reflectionOpen, setReflectionOpen] = useState(false)
-  // const [sceneIndex, setSceneIndex] = useState<0 | 1>(0)
-  // const [showAchievementsPrompt, setShowAchievementsPrompt] = useState(false)
-
   const [showLookBackPrompt, setShowLookBackPrompt] = useState(false)
 
-  function NextScene() {
-    return (
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          zIndex: 90,
-          display: "grid",
-          placeItems: "center",
-          color: "rgba(255,255,255,0.92)",
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          fontWeight: 900,
-        }}
-      >
-        next scene
-      </div>
-    )
-  }
+  const enterFullscreen = useCallback(() => {
+    const el = appContainerRef.current ?? document.documentElement
+    const anyEl = el as any
+
+    try {
+      const result =
+        el.requestFullscreen?.() ??
+        anyEl.webkitRequestFullscreen?.() ??
+        anyEl.msRequestFullscreen?.() ??
+        anyEl.mozRequestFullScreen?.()
+
+      if (result && typeof (result as Promise<void>).catch === "function") {
+        ;(result as Promise<void>).catch(() => {})
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
 
   useEffect(() => {
     const audio = new Audio()
@@ -520,42 +630,60 @@ export default function App() {
     }
   }, [])
 
-  const syncMusic = useCallback((mode: SceneMode, opts?: { restart?: boolean; force?: boolean }) => {
-    const audio = backgroundAudioRef.current
-    if (!audio) return
+  const syncMusic = useCallback(
+    (mode: SceneMode, opts?: { restart?: boolean; force?: boolean }) => {
+      const audio = backgroundAudioRef.current
+      if (!audio) return
 
-    const nextSrc = SCENE_MUSIC[mode]
-    const shouldPlay = opts?.force ?? (hasStarted && !startModalOpen)
+      const nextSrc = SCENE_MUSIC[mode]
+      const shouldPlay = opts?.force ?? (hasStarted && !startModalOpen)
 
-    if (!shouldPlay || !nextSrc) {
-      audio.pause()
-      audio.currentTime = 0
-      currentTrackRef.current = nextSrc ?? null
-      return
-    }
+      if (!shouldPlay || !nextSrc) {
+        audio.pause()
+        audio.currentTime = 0
+        currentTrackRef.current = nextSrc ?? null
+        return
+      }
 
-    if (currentTrackRef.current !== nextSrc) {
-      audio.pause()
-      audio.currentTime = 0
-      audio.src = nextSrc
-      audio.load()
-      currentTrackRef.current = nextSrc
-    } else if (opts?.restart) {
-      audio.currentTime = 0
-    }
+      if (currentTrackRef.current !== nextSrc) {
+        audio.pause()
+        audio.currentTime = 0
+        audio.src = nextSrc
+        audio.load()
+        currentTrackRef.current = nextSrc
+      } else if (opts?.restart) {
+        audio.currentTime = 0
+      }
 
-    audio.loop = true
-    if (audio.paused) {
-      void audio.play().catch(() => {
-        needsUnlockRef.current = true
-      })
-    }
-  }, [hasStarted, startModalOpen])
+      audio.loop = true
+      if (audio.paused) {
+        void audio.play().catch(() => {
+          needsUnlockRef.current = true
+        })
+      }
+    },
+    [hasStarted, startModalOpen]
+  )
 
-  const gotoScene = useCallback((next: SceneMode) => {
-    setSceneMode(next)
-    syncMusic(next, { restart: true, force: true })
-  }, [syncMusic])
+  const gotoScene = useCallback(
+    (next: SceneMode) => {
+      setSceneMode(next)
+      syncMusic(next, { restart: true, force: true })
+    },
+    [syncMusic]
+  )
+
+  const gotoPrev = useCallback(() => {
+    const idx = SCENE_ORDER.indexOf(sceneMode)
+    const prev = SCENE_ORDER[(idx - 1 + SCENE_ORDER.length) % SCENE_ORDER.length]
+    gotoScene(prev)
+  }, [sceneMode, gotoScene])
+
+  const gotoNext = useCallback(() => {
+    const idx = SCENE_ORDER.indexOf(sceneMode)
+    const next = SCENE_ORDER[(idx + 1) % SCENE_ORDER.length]
+    gotoScene(next)
+  }, [sceneMode, gotoScene])
 
   useEffect(() => {
     if (!hasStarted || startModalOpen) return
@@ -563,29 +691,11 @@ export default function App() {
   }, [sceneMode, hasStarted, startModalOpen, syncMusic])
 
   const startExperience = useCallback(() => {
+    enterFullscreen()
     setStartModalOpen(false)
     setHasStarted(true)
     syncMusic("birthday", { restart: true, force: true })
-  }, [syncMusic])
-
-  // reflection/achievements (disabled for now)
-  // useEffect(() => {
-  //   if (sceneIndex !== 0 || !hasAnimationCompleted || isCandleLit) {
-  //     setShowAchievementsPrompt(false)
-  //     return
-  //   }
-  //   const t = window.setTimeout(() => setShowAchievementsPrompt(true), ACHIEVEMENTS_PROMPT_DELAY)
-  //   return () => window.clearTimeout(t)
-  // }, [sceneIndex, hasAnimationCompleted, isCandleLit])
-
-  // useEffect(() => {
-  //   if (!hasAnimationCompleted) {
-  //     setShowReflectionButton(false)
-  //     return
-  //   }
-  //   const t = window.setTimeout(() => setShowReflectionButton(true), 10000)
-  //   return () => window.clearTimeout(t)
-  // }, [hasAnimationCompleted])
+  }, [enterFullscreen, syncMusic])
 
   useEffect(() => {
     if (sceneMode !== "birthday") return
@@ -622,16 +732,7 @@ export default function App() {
     if (hasAnimationCompleted && isCandleLit) {
       blowOut()
     }
-  }, [
-    hasStarted,
-    startModalOpen,
-    sceneMode,
-    showLookBackPrompt,
-    hasAnimationCompleted,
-    isCandleLit,
-    goToCookie,
-    blowOut,
-  ])
+  }, [hasStarted, startModalOpen, sceneMode, showLookBackPrompt, hasAnimationCompleted, isCandleLit, goToCookie, blowOut])
 
   useEffect(() => {
     if (sceneMode !== "birthday") return
@@ -717,20 +818,25 @@ export default function App() {
   }, [])
 
   const isScenePlaying = hasStarted && sceneStarted
+  const navDisabled = !hasStarted || startModalOpen
 
   return (
-    <div className="App">
+    <div className="App" ref={appContainerRef}>
+      <SceneNav disabled={navDisabled} onPrev={gotoPrev} onNext={gotoNext} />
+
       {sceneMode === "cookie" ? (
-        <CookieScene onNextScene={() => gotoScene("gym")} />
-      ) : sceneMode === "gym" ? (
-        <GymScene onNextScene={() => gotoScene("italian")} />
+        <CookieScene onNextScene={() => gotoScene("italian")} />
       ) : sceneMode === "italian" ? (
         <ItalianScene onNextScene={() => gotoScene("dbd")} />
       ) : sceneMode === "dbd" ? (
-  <DBD onNextScene={() => gotoScene("next")} />
-      ) : sceneMode === "next" ? (
-        <NextScene />
-      ) : (
+        <DBD onNextScene={() => gotoScene("gym")} />
+      ) : sceneMode === "gym" ? (
+        <GymScene onNextScene={() => gotoScene("reflection")} />
+      ) : sceneMode === "reflection" ? (
+        <Reflection onNextScene={() => gotoScene("end")} />
+    ) : sceneMode === "end" ? (
+      <EndScene />
+    ) : (
         <>
           <div className="background-overlay" style={{ opacity: backgroundOpacity }}>
             <div className="typed-text">
@@ -755,7 +861,7 @@ export default function App() {
           )}
 
           {hasAnimationCompleted && !isCandleLit && showLookBackPrompt && (
-            <GlassActionOverlay title="Look back on your achievements at 22" buttonText="Continue" onAction={activate} />
+            <GlassActionOverlay title="Look back on your highlights at 22" buttonText="Continue" onAction={activate} />
           )}
 
           <Canvas
